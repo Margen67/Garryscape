@@ -65,7 +65,7 @@ class Script(unittest.TestCase):
         r=self.run_script();self.assertEqual(r.returncode,0,r.stderr+r.stdout)
         self.assertEqual(self.counter.read_text().count('compile'),1)
         self.assertEqual(model.stat().st_mtime_ns,stamp)
-        self.assertFalse(any(p.suffix in {'.qc','.dmx','.glb'} for p in self.addon.rglob('*')))
+        self.assertFalse(any(p.suffix in {'.qc','.dmx','.glb','.gltf','.bin','.png'} for p in self.addon.rglob('*')))
         self.assertTrue((self.addon/'lua/autorun/server/garryscape_preview.lua').is_file())
     def test_default_installs_under_garrysmod_directory(self):
         game=self.path/'Steam/GarrysMod'

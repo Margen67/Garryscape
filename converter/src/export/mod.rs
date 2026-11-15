@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pub mod dmx;
-pub mod glb;
+pub mod gltf;
 pub mod vtf;
 use crate::bake::Baked;
 use anyhow::Result;
@@ -35,7 +35,7 @@ pub fn write(baked: &Baked, root: &Path, namespace: &str, id: &str) -> Result<()
         fs::create_dir_all(p)?;
     }
     let png = png(baked)?;
-    glb::write(baked, &png, &preview.join(format!("{id}.glb")))?;
+    gltf::write(baked, &png, &preview.join(id))?;
     vtf::write(baked, &materials.join(format!("{id}.vtf")))?;
     for (suffix, water) in [("", false), ("_water", true)] {
         if water && !baked.triangles.iter().any(|t| t.water) {
@@ -60,7 +60,10 @@ pub fn write(baked: &Baked, root: &Path, namespace: &str, id: &str) -> Result<()
             "previewCameraLocal":[0.,0.,baked.bounds[1][2]+1200.],"previewPitch":89,
         }))?,
     )?;
-    println!("GLB: {}", preview.join(format!("{id}.glb")).display());
+    println!(
+        "glTF: {}",
+        preview.join(id).join(format!("{id}.gltf")).display()
+    );
     println!("QC: {}", source.join("model.qc").display());
     Ok(())
 }

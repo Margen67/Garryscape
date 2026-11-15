@@ -11,6 +11,7 @@
 *.vtf
 *.glb
 *.gltf
+*.bin
 *.dmx
 *.qc
 *.qci

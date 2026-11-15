@@ -1,7 +1,7 @@
 # Garryscape
 
 Offline **2009Scape (RuneScape revision 530)** terrain conversion for Garry's Mod.
-The Rust converter reads the native cache and exports a Blender-preview **GLB**,
+The Rust converter reads the native cache and exports a Blender-preview **glTF folder**,
 **DMX**, QC, and Source materials. Git Bash invokes Garry's Mod's StudioMDL to
 produce one region model. **No SMD and no cache decoding inside GMod.**
 
@@ -64,7 +64,10 @@ For `regions 50 50`, namespace `2009scape`:
 
 ```text
 output/build/2009scape/regions/50_50/
-  preview/garryscape/2009scape/regions/50_50.glb
+  preview/garryscape/2009scape/regions/50_50/
+    50_50.gltf
+    50_50.bin
+    50_50.png
   source/garryscape/2009scape/regions/50_50/
     model.qc
     reference_0.dmx ... reference_4.dmx
@@ -84,7 +87,7 @@ output/build/2009scape/regions/50_50/
 ```
 
 The addon receives **only** model companions, materials, the small server Lua
-loader, license, and `data/garryscape/terrain_preview.json`. GLB, DMX, QC, logs, cache files,
+loader, license, and `data/garryscape/terrain_preview.json`. glTF, DMX, QC, logs, cache files,
 and the working `game/` stay outside the addon. Generated assets are ignored by
 Git; commits contain source, scripts, tests, documentation, and notices only.
 
@@ -96,16 +99,20 @@ All floor textures and transitions are baked offline into **one texture** with
 128×128 source samples and 16-pixel extruded gutters. Opaque ground and translucent water
 use two stock `VertexLitGeneric` materials referencing that same VTF. Source
 handles lighting and culling; Lua performs no per-frame rendering or baking.
-The GLB embeds the same atlas, has one mesh, and uses metres/Y-up; DMX uses
+The glTF references the full-resolution PNG atlas and a separate binary mesh
+buffer in the same folder. It has one mesh and uses metres/Y-up; DMX uses
 Source inches/Z-up. Both incorporate `--scale`.
 
 The full four-floor 50/50 bake has 10,733 triangles. Its lossless RGBA8888
 8192×8192 VTF, including mipmaps, is approximately **341 MiB**. This is the memory
 tradeoff of retaining original samples in one texture. Textures are not silently
-resized to fit; exports exceeding an 8192px atlas fail explicitly.
+resized to fit; exports exceeding an 8192px atlas fail explicitly. Atlas packing
+copies each baked image pixel-for-pixel and adds padding; exporting the PNG does
+not resize or recompress it. VTF mipmaps are separate reduced-detail levels; the
+base image remains full resolution.
 
 Water is a static bake of the cache texture with transparency, not a recreation
-of RT4's animated/refraction HD water shader. Cache environmental lights are
+of RT4's animated HD water renderer. Cache environmental lights are
 parsed, but not reproduced as dynamic Source lights. Stock Source lighting will
 therefore differ from RuneScape's lighting.
 
@@ -143,7 +150,7 @@ python tests/test_script.py
 python tests/test_preview.py  # optional liblua 5.3/5.4 for the lifecycle harness
 ```
 
-For visual inspection, import the GLB into Blender; Blender is not required to
+For visual inspection, import the `.gltf` file into Blender; Blender is not required to
 convert or compile. Linux can export the inputs using `--preview-only`; actual
 Windows StudioMDL and in-game rendering must be checked on Windows. Automated
 script tests use a fake compiler to verify orchestration, not to claim a real

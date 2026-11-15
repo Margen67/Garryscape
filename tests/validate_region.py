@@ -85,13 +85,16 @@ def validate(root):
         assert '\n\n' not in vmt and vmt.endswith('}\n')
         assert 'VertexLitGeneric' in vmt and '$surfaceprop' not in vmt
         assert f'models/garryscape/{namespace}/regions/{region}"' in vmt
-    glb = (root / f'preview/garryscape/{namespace}/regions/{region}.glb').read_bytes()
-    assert glb[:4] == b'glTF' and struct.unpack_from('<II', glb, 4) == (2, len(glb))
-    json_length, tag = struct.unpack_from('<I4s', glb, 12)
-    assert tag == b'JSON'
-    doc = json.loads(glb[20:20 + json_length])
-    bin_offset = 20 + json_length + 8
-    assert glb[bin_offset-4:bin_offset] == b'BIN\0'
+    folder = root / f'preview/garryscape/{namespace}/regions/{region}'
+    doc = json.loads((folder / f'{region}.gltf').read_text())
+    assert doc['asset']['version'] == '2.0'
+    assert len(doc['buffers']) == 1 and doc['buffers'][0]['uri'] == f'{region}.bin'
+    buffer = (folder / doc['buffers'][0]['uri']).read_bytes()
+    assert len(buffer) == doc['buffers'][0]['byteLength']
+    assert doc['images'][0]['uri'] == f'{region}.png'
+    png = (folder / doc['images'][0]['uri']).read_bytes()
+    assert png[:8] == b'\x89PNG\r\n\x1a\n'
+    assert struct.unpack_from('>II', png, 16) == (width, height)
     assert len(doc['images']) == len(doc['textures']) == len(doc['meshes']) == 1
     assert all(not material['doubleSided'] for material in doc['materials'])
     count = sum(doc['accessors'][p['indices']]['count'] // 3 for p in doc['meshes'][0]['primitives'])
@@ -102,8 +105,8 @@ def validate(root):
     def array(index, components):
         acc = doc['accessors'][index]
         view = doc['bufferViews'][acc['bufferView']]
-        offset = bin_offset + view.get('byteOffset', 0) + acc.get('byteOffset', 0)
-        return [struct.unpack_from('<' + 'f'*components, glb, offset+i*components*4) for i in range(acc['count'])]
+        offset = view.get('byteOffset', 0) + acc.get('byteOffset', 0)
+        return [struct.unpack_from('<' + 'f'*components, buffer, offset+i*components*4) for i in range(acc['count'])]
     vertices = array(0, 3)
     normals = array(1, 3)
     assert all(all(math.isfinite(v) for v in a) for a in vertices + normals)

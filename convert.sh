@@ -12,7 +12,7 @@ Usage: ./convert.sh regions X Y [options]
   --output PATH      Build/source/preview directory (default: ./output)
   --studiomdl PATH   GMod's bin/win64/studiomdl.exe
   --addon PATH       Compiled model/material destination
-  --preview-only     Export GLB, DMX, QC and materials without compiling/installing
+  --preview-only     Export glTF, DMX, QC and materials without compiling/installing
   --rebuild          Regenerate converted assets even if inputs have not changed
 Only terrain is implemented. Region coordinates are required. No collision.
 HELP
@@ -69,7 +69,7 @@ CLI="$ROOT/converter/target/release/garryscape-convert"
 BUILD="$OUTPUT/build/$NAME/regions/${RX}_${RY}"
 SOURCE="$BUILD/source/garryscape/$NAME/regions/${RX}_${RY}"
 GAME="$BUILD/game"
-if (( PREVIEW )); then echo "Preview ready: $BUILD/preview/garryscape/$NAME/regions/${RX}_${RY}.glb"; exit 0; fi
+if (( PREVIEW )); then echo "Preview ready: $BUILD/preview/garryscape/$NAME/regions/${RX}_${RY}/${RX}_${RY}.gltf"; exit 0; fi
 echo "Addon destination: $ADDON"
 MODEL="$GAME/models/garryscape/$NAME/regions/${RX}_${RY}"
 # Keep failed compiler inputs and logs outside the addon for diagnosis.
@@ -99,4 +99,4 @@ copy_changed "$ROOT/LICENSE" "$ADDON/LICENSE"
 copy_changed "$ROOT/addons/garryscape/lua/autorun/server/garryscape_preview.lua" "$ADDON/lua/autorun/server/garryscape_preview.lua"
 copy_changed "$BUILD/manifest.json" "$ADDON/data/garryscape/terrain_preview.json"
 echo "Installed compiled region and preview Lua in $ADDON"
-echo 'Sources, GLB and compile.log remain in the output directory.'
+echo 'Sources, glTF and compile.log remain in the output directory.'

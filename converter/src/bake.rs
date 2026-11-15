@@ -372,30 +372,13 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<Baked> {
             images.len()
         );
     }
-    // Keep the original 128x128 samples. Sixteen-pixel gutters prevent
-    // neighboring atlas islands bleeding together through common mip levels.
-    let gutter = 16;
-    let pitch = 128 + 2 * gutter;
-    let mut size = 256usize;
-    while (size / pitch) * (size / pitch) < images.len() {
-        size *= 2;
-    }
-    ensure!(size<=8192,"Single atlas needs {size}px ({} distinct tiles); exceeds the 8192px Source target. No texture resolution was silently reduced.",images.len());
+    let Atlas {
+        pixels,
+        size,
+        pitch,
+        gutter,
+    } = pack_atlas(&images)?;
     let cols = size / pitch;
-    let mut pixels = vec![0u8; size * size * 4];
-    for (i, image) in images.iter().enumerate() {
-        let ox = i % cols * pitch;
-        let oy = i / cols * pitch;
-        for y in 0..pitch {
-            for x in 0..pitch {
-                let src = ((y as i32 - gutter as i32).clamp(0, 127) as usize * 128
-                    + (x as i32 - gutter as i32).clamp(0, 127) as usize)
-                    * 4;
-                let dst = ((oy + y) * size + ox + x) * 4;
-                pixels[dst..dst + 4].copy_from_slice(&image[src..src + 4]);
-            }
-        }
-    }
     let mut triangles = vec![];
     let mut bounds = [[f32::INFINITY; 3], [f32::NEG_INFINITY; 3]];
     let mut plane_triangles = [0; 4];
@@ -453,9 +436,75 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<Baked> {
         plane_triangles,
     })
 }
+struct Atlas {
+    pixels: Vec<u8>,
+    size: usize,
+    pitch: usize,
+    gutter: usize,
+}
+
+fn pack_atlas(images: &[Vec<u8>]) -> Result<Atlas> {
+    ensure!(
+        images.iter().all(|image| image.len() == 128 * 128 * 4),
+        "Atlas input must retain its 128x128 baked dimensions; resizing is not allowed"
+    );
+    // Keep the original 128x128 samples. Sixteen-pixel gutters prevent
+    // neighboring atlas islands bleeding together through common mip levels.
+    let gutter = 16;
+    let pitch = 128 + 2 * gutter;
+    let mut size = 256usize;
+    while (size / pitch) * (size / pitch) < images.len() {
+        size *= 2;
+    }
+    ensure!(size<=8192,"Single atlas needs {size}px ({} distinct tiles); exceeds the 8192px Source target. No texture resolution was silently reduced.",images.len());
+    let cols = size / pitch;
+    let mut pixels = vec![0u8; size * size * 4];
+    for (i, image) in images.iter().enumerate() {
+        let ox = i % cols * pitch;
+        let oy = i / cols * pitch;
+        for y in 0..pitch {
+            for x in 0..pitch {
+                let src = ((y as i32 - gutter as i32).clamp(0, 127) as usize * 128
+                    + (x as i32 - gutter as i32).clamp(0, 127) as usize)
+                    * 4;
+                let dst = ((oy + y) * size + ox + x) * 4;
+                pixels[dst..dst + 4].copy_from_slice(&image[src..src + 4]);
+            }
+        }
+    }
+    Ok(Atlas {
+        pixels,
+        size,
+        pitch,
+        gutter,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn atlas_preserves_every_source_pixel_and_only_extrudes_padding() {
+        let original = (0..128 * 128)
+            .flat_map(|i| [(i % 128) as u8, (i / 128) as u8, (i % 251) as u8, 255])
+            .collect::<Vec<_>>();
+        let images = vec![original.clone(), vec![73; 128 * 128 * 4]];
+        let packed = pack_atlas(&images).unwrap();
+        let cols = packed.size / packed.pitch;
+        for (index, image) in images.iter().enumerate() {
+            let x = index % cols * packed.pitch + packed.gutter;
+            let y = index / cols * packed.pitch + packed.gutter;
+            for row in 0..128 {
+                let offset = ((y + row) * packed.size + x) * 4;
+                assert_eq!(
+                    &packed.pixels[offset..offset + 128 * 4],
+                    &image[row * 128 * 4..(row + 1) * 128 * 4]
+                );
+            }
+        }
+        assert_eq!(&packed.pixels[..4], &original[..4]);
+        assert_eq!(images[0], original);
+    }
     #[test]
     fn triangle_coverage() {
         assert!(barycentric([[0., 0.], [1., 0.], [0., 1.]], [0.2, 0.2]).is_some());

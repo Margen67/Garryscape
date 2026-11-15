@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 use crate::bake::Baked;
-use anyhow::{ensure, Result};
+use anyhow::{Context, Result};
 use serde_json::{json, Value};
 use std::{fs, path::Path};
 fn pad(v: &mut Vec<u8>, byte: u8) {
@@ -99,23 +99,79 @@ pub fn write(baked: &Baked, png: &[u8], path: &Path) -> Result<()> {
         materials.push(json!({"name":if water {"water"}else{"terrain"},"pbrMetallicRoughness":{"baseColorTexture":{"index":0},"metallicFactor":0,"roughnessFactor":1},"alphaMode":if water {"BLEND"}else{"OPAQUE"},"doubleSided":false}));
         primitives.push(json!({"attributes":{"POSITION":0,"NORMAL":1,"TEXCOORD_0":2},"indices":accessor,"material":material,"mode":4}));
     }
-    let image = view(&mut bin, &mut views, png, None);
     pad(&mut bin, 0);
-    let document = json!({"asset":{"version":"2.0","generator":"Garryscape offline converter"},"scene":0,"scenes":[{"nodes":[0]}],"nodes":[{"name":"terrain","mesh":0}],"meshes":[{"name":"region","primitives":primitives}],"materials":materials,"textures":[{"sampler":0,"source":0}],"samplers":[{"magFilter":9729,"minFilter":9987,"wrapS":33071,"wrapT":33071}],"images":[{"bufferView":image,"mimeType":"image/png"}],"buffers":[{"byteLength":bin.len()}],"bufferViews":views,"accessors":accessors});
-    let mut json = serde_json::to_vec(&document)?;
-    pad(&mut json, b' ');
-    let length = 12 + 8 + json.len() + 8 + bin.len();
-    ensure!(length <= u32::MAX as usize, "GLB too large");
-    let mut output = Vec::with_capacity(length);
-    output.extend_from_slice(b"glTF");
-    output.extend_from_slice(&2u32.to_le_bytes());
-    output.extend_from_slice(&(length as u32).to_le_bytes());
-    output.extend_from_slice(&(json.len() as u32).to_le_bytes());
-    output.extend_from_slice(b"JSON");
-    output.extend(json);
-    output.extend_from_slice(&(bin.len() as u32).to_le_bytes());
-    output.extend_from_slice(b"BIN\0");
-    output.extend(bin);
-    fs::write(path, output)?;
+    fs::create_dir_all(path)?;
+    let id = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .context("Invalid glTF directory name")?;
+    let buffer_name = format!("{id}.bin");
+    let image_name = format!("{id}.png");
+    let document = json!({"asset":{"version":"2.0","generator":"Garryscape offline converter"},"scene":0,"scenes":[{"nodes":[0]}],"nodes":[{"name":"terrain","mesh":0}],"meshes":[{"name":"region","primitives":primitives}],"materials":materials,"textures":[{"sampler":0,"source":0}],"samplers":[{"magFilter":9729,"minFilter":9987,"wrapS":33071,"wrapT":33071}],"images":[{"uri":image_name}],"buffers":[{"uri":buffer_name,"byteLength":bin.len()}],"bufferViews":views,"accessors":accessors});
+    fs::write(path.join(&buffer_name), bin)?;
+    // Write the original encoded atlas verbatim: no preview resize or recompression.
+    fs::write(path.join(&image_name), png)?;
+    fs::write(
+        path.join(format!("{id}.gltf")),
+        serde_json::to_vec_pretty(&document)?,
+    )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bake::{Triangle, Vertex};
+    #[test]
+    fn external_texture_is_written_verbatim_at_original_dimensions() {
+        let positions = [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]];
+        let vertices = positions.map(|pos| Vertex {
+            pos,
+            normal: [0., 0., 1.],
+            uv: [0., 0.],
+        });
+        let baked = Baked {
+            triangles: vec![Triangle {
+                vertices,
+                water: false,
+            }],
+            pixels: vec![
+                255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 10, 20, 30, 255,
+            ],
+            size: 2,
+            tiles: 1,
+            unique_tiles: 1,
+            bounds: [[0., 0., 0.], [1., 1., 0.]],
+            plane_triangles: [1, 0, 0, 0],
+        };
+        let encoded = crate::export::png(&baked).unwrap();
+        let directory = std::env::temp_dir()
+            .join(format!(
+                "garryscape-gltf-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ))
+            .join("fixture");
+        write(&baked, &encoded, &directory).unwrap();
+        assert_eq!(fs::read(directory.join("fixture.png")).unwrap(), encoded);
+        let decoder = png::Decoder::new(std::io::Cursor::new(&encoded));
+        let mut reader = decoder.read_info().unwrap();
+        assert_eq!((reader.info().width, reader.info().height), (2, 2));
+        let mut decoded = vec![0; reader.output_buffer_size()];
+        reader.next_frame(&mut decoded).unwrap();
+        assert_eq!(decoded, baked.pixels);
+        let document: Value =
+            serde_json::from_slice(&fs::read(directory.join("fixture.gltf")).unwrap()).unwrap();
+        assert_eq!(document["images"][0]["uri"], "fixture.png");
+        assert_eq!(document["buffers"][0]["uri"], "fixture.bin");
+        assert!(document["images"][0].get("bufferView").is_none());
+        assert_eq!(
+            fs::metadata(directory.join("fixture.bin")).unwrap().len(),
+            document["buffers"][0]["byteLength"].as_u64().unwrap()
+        );
+        fs::remove_dir_all(directory.parent().unwrap()).unwrap();
+    }
 }

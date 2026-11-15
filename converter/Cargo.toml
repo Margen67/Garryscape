@@ -1,9 +1,9 @@
 [package]
 name = "garryscape-convert"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2021"
 license = "AGPL-3.0-only"
-description = "Offline 2009Scape terrain to GLB and Source DMX converter"
+description = "Offline 2009Scape terrain to glTF and Source DMX converter"
 
 [dependencies]
 anyhow = "1"

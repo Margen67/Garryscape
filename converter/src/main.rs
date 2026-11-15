@@ -132,7 +132,9 @@ fn run() -> Result<()> {
 }
 fn outputs_present(build: &Path, name: &str, id: &str) -> Result<bool> {
     for path in [
-        build.join(format!("preview/garryscape/{name}/regions/{id}.glb")),
+        build.join(format!("preview/garryscape/{name}/regions/{id}/{id}.gltf")),
+        build.join(format!("preview/garryscape/{name}/regions/{id}/{id}.bin")),
+        build.join(format!("preview/garryscape/{name}/regions/{id}/{id}.png")),
         build.join(format!("source/garryscape/{name}/regions/{id}/model.qc")),
         build.join(format!(
             "game/materials/models/garryscape/{name}/regions/{id}.vtf"
