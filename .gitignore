@@ -1,0 +1,17 @@
+/output/
+/converter/target/
+*.zip
+*.7z*
+# User caches and generated Source/Blender assets never belong in Git.
+*.mdl
+*.vvd
+*.vtx
+*.phy
+*.ani
+*.vtf
+*.glb
+*.gltf
+*.dmx
+*.qc
+*.qci
+main_file_cache.*

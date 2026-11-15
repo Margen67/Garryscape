@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Git Bash / POSIX entry point. All RuneScape decoding runs in the Rust CLI.
+set -euo pipefail
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+usage() {
+    cat <<'HELP'
+Usage: ./convert.sh regions X Y [options]
+  --cache PATH       Native 2009Scape cache (default: ${UserProfile}/2009scape/cache/runescape)
+  --scale NUMBER     Model scale (default: 0.68)
+  --name NAME        Namespace (default: 2009scape; empty string uses 530)
+  --output PATH      Build/source/preview directory (default: ./output)
+  --studiomdl PATH   GMod's bin/win64/studiomdl.exe
+  --addon PATH       Compiled model/material destination
+  --preview-only     Export GLB, DMX, QC and materials without compiling/installing
+  --rebuild          Regenerate converted assets even if inputs have not changed
+Only terrain is implemented. Region coordinates are required. No collision.
+HELP
+}
+fail() { echo "ERROR: $*" >&2; exit 1; }
+# MSYS2 must not reinterpret native Windows arguments passed to StudioMDL.
+native_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi; }
+shell_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -u "$1"; else printf '%s\n' "$1"; fi; }
+if [[ $# == 0 || ${1:-} == --help || ${1:-} == -h ]]; then usage; exit 0; fi
+[[ ${1:-} == regions ]] || fail 'Only regions are implemented.'
+[[ $# -ge 3 && $2 =~ ^[0-9]+$ && $3 =~ ^[0-9]+$ ]] || fail 'Specify the region: ./convert.sh regions 50 50'
+TYPE=$1; RX=$((10#$2)); RY=$((10#$3)); shift 3
+(( RX <= 255 && RY <= 255 )) || fail 'Region coordinates must be 0..255.'
+PROFILE=${UserProfile:-${USERPROFILE:-}}
+CACHE=${PROFILE:+$PROFILE/2009scape/cache/runescape}
+SCALE=0.68
+NAME=2009scape
+OUTPUT="$ROOT/output"
+STUDIOMDL='C:/Program Files (x86)/Steam/steamapps/common/GarrysMod/bin/win64/studiomdl.exe'
+ADDON='C:/Program Files (x86)/Steam/steamapps/common/GarrysMod/addons/garryscape'
+PREVIEW=0
+REBUILD=()
+while (( $# )); do
+    case "$1" in
+        --preview-only) PREVIEW=1; shift ;;
+        --rebuild) REBUILD=(--rebuild); shift ;;
+        --cache|--scale|--name|--output|--studiomdl|--addon)
+            (( $# >= 2 )) || fail "$1 requires a value"
+            case "$1" in
+                --cache) CACHE=$2 ;; --scale) SCALE=$2 ;; --name) NAME=$2 ;;
+                --output) OUTPUT=$2 ;; --studiomdl) STUDIOMDL=$2 ;; --addon) ADDON=$2 ;;
+            esac
+            shift 2 ;;
+        *) fail "Unknown option: $1" ;;
+    esac
+done
+[[ -n $NAME ]] || NAME=530
+[[ $NAME =~ ^[a-z0-9_-]+$ ]] || fail 'Namespace must use lowercase letters, digits, hyphens or underscores.'
+[[ -n $CACHE ]] || fail 'Set UserProfile or pass --cache PATH.'
+CACHE=$(shell_path "$CACHE")
+OUTPUT=$(shell_path "$OUTPUT")
+mkdir -p -- "$OUTPUT"
+OUTPUT="$(cd -- "$OUTPUT" && pwd)"
+STUDIOMDL=$(shell_path "$STUDIOMDL")
+ADDON=$(shell_path "$ADDON")
+if [[ -f $STUDIOMDL ]]; then STUDIOMDL="$(cd -- "$(dirname -- "$STUDIOMDL")" && pwd)/$(basename -- "$STUDIOMDL")"; fi
+[[ -f "$CACHE/main_file_cache.dat2" || -f "$CACHE/main_file_cache.dat2.dat" || -f "$CACHE/LIVE/main_file_cache.dat2" || -f "$CACHE/LIVE/main_file_cache.dat2.dat" ]] || fail "2009Scape cache not found in $CACHE. Supply your revision-530 cache with --cache; no cache is downloaded."
+if (( ! PREVIEW )); then [[ -f $STUDIOMDL ]] || fail "StudioMDL not found: $STUDIOMDL (use --preview-only to export without it)"; fi
+command -v cargo >/dev/null 2>&1 || fail 'Rust/Cargo is required: https://rustup.rs'
+cargo build --locked --release --manifest-path "$ROOT/converter/Cargo.toml"
+CLI="$ROOT/converter/target/release/garryscape-convert"
+[[ ! -f $CLI.exe ]] || CLI=$CLI.exe
+"$CLI" regions "$RX" "$RY" --cache "$(native_path "$CACHE")" --scale "$SCALE" --name "$NAME" --output "$(native_path "$OUTPUT")" "${REBUILD[@]}"
+BUILD="$OUTPUT/build/$NAME/regions/${RX}_${RY}"
+SOURCE="$BUILD/source/garryscape/$NAME/regions/${RX}_${RY}"
+GAME="$BUILD/game"
+if (( PREVIEW )); then echo "Preview ready: $BUILD/preview/garryscape/$NAME/regions/${RX}_${RY}.glb"; exit 0; fi
+MODEL="$GAME/models/garryscape/$NAME/regions/${RX}_${RY}"
+# Keep failed compiler inputs and logs outside the addon for diagnosis.
+if [[ ! -f $BUILD/compiled.json ]] || ! cmp -s "$BUILD/complete.json" "$BUILD/compiled.json" || [[ ! -s $MODEL.mdl || ! -s $MODEL.vvd || ! -s $MODEL.dx90.vtx ]]; then
+    echo "Compiling $SOURCE/model.qc"
+    if ! (cd -- "$SOURCE" && MSYS2_ARG_CONV_EXCL='*' "$STUDIOMDL" -game "$(native_path "$GAME")" "$(native_path "$SOURCE/model.qc")") 2>&1 | tee "$SOURCE/compile.log"; then
+        fail "Compilation failed; inputs and log retained at $SOURCE"
+    fi
+    for suffix in mdl vvd dx90.vtx; do [[ -s $MODEL.$suffix ]] || fail "StudioMDL did not produce $MODEL.$suffix; see $SOURCE/compile.log"; done
+    if grep -qi 'ERROR:' "$SOURCE/compile.log"; then fail "StudioMDL reported errors; see $SOURCE/compile.log"; fi
+    cp -- "$BUILD/complete.json" "$BUILD/compiled.json"
+else
+    echo 'Using compiled Source model.'
+fi
+copy_changed() { local src=$1 dst=$2; mkdir -p -- "$(dirname -- "$dst")"; if [[ ! -f $dst ]] || ! cmp -s "$src" "$dst"; then cp -- "$src" "$dst"; fi; }
+for suffix in mdl vvd dx90.vtx dx80.vtx sw.vtx; do
+    asset="$MODEL.$suffix"
+    [[ ! -f $asset ]] || copy_changed "$asset" "$ADDON/models/garryscape/$NAME/regions/$(basename -- "$asset")"
+done
+for asset in "$GAME/materials/models/garryscape/$NAME/regions/"*; do copy_changed "$asset" "$ADDON/materials/models/garryscape/$NAME/regions/$(basename -- "$asset")"; done
+copy_changed "$ROOT/addons/garryscape/lua/autorun/server/garryscape_preview.lua" "$ADDON/lua/autorun/server/garryscape_preview.lua"
+copy_changed "$BUILD/manifest.json" "$ADDON/data/garryscape/terrain_preview.json"
+echo "Installed compiled region and preview Lua in $ADDON"
+echo 'Sources, GLB and compile.log remain in the output directory.'
