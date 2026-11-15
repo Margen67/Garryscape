@@ -135,13 +135,15 @@ bash -n convert.sh
 ./convert.sh regions 50 50 --cache /path/to/cache --preview-only
 python tests/validate_region.py output/build/2009scape/regions/50_50
 python tests/test_script.py
+python tests/test_preview.py  # optional liblua 5.3/5.4 for the lifecycle harness
 ```
 
 For visual inspection, import the GLB into Blender; Blender is not required to
 convert or compile. Linux can export the inputs using `--preview-only`; actual
 Windows StudioMDL and in-game rendering must be checked on Windows. Automated
 script tests use a fake compiler to verify orchestration, not to claim a real
-MDL compilation.
+MDL compilation. The Lua harness checks map isolation, native entity cleanup,
+missing-model errors, and deferred player placement without running Source.
 
 ## References
 
