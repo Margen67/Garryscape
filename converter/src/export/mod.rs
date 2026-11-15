@@ -2,10 +2,10 @@
 pub mod dmx;
 pub mod gltf;
 pub mod vtf;
-use crate::bake::Baked;
+use crate::region::RegionMesh;
 use anyhow::Result;
 use std::{fs, path::Path};
-pub fn png(baked: &Baked) -> Result<Vec<u8>> {
+pub fn png(baked: &RegionMesh) -> Result<Vec<u8>> {
     let mut output = vec![];
     {
         let mut enc = png::Encoder::new(&mut output, baked.size as u32, baked.size as u32);
@@ -16,7 +16,7 @@ pub fn png(baked: &Baked) -> Result<Vec<u8>> {
     }
     Ok(output)
 }
-pub fn write(baked: &Baked, root: &Path, namespace: &str, id: &str) -> Result<()> {
+pub fn write(baked: &RegionMesh, root: &Path, namespace: &str, id: &str) -> Result<()> {
     let source = root
         .join("source")
         .join("garryscape")
@@ -27,43 +27,48 @@ pub fn write(baked: &Baked, root: &Path, namespace: &str, id: &str) -> Result<()
         .join("game/materials/models/garryscape")
         .join(namespace)
         .join("regions");
-    let preview = root
-        .join("preview/garryscape")
-        .join(namespace)
-        .join("regions");
+    let preview = root.join("preview");
     for p in [&source, &materials, &preview] {
         fs::create_dir_all(p)?;
     }
     let png = png(baked)?;
-    gltf::write(baked, &png, &preview.join(id))?;
+    gltf::write(baked, &png, &preview, id)?;
     vtf::write(baked, &materials.join(format!("{id}.vtf")))?;
-    for (suffix, water) in [("", false), ("_water", true)] {
-        if water && !baked.triangles.iter().any(|t| t.water) {
-            continue;
-        }
-        let alpha = if water {
+    for (i, surface) in baked.materials.iter().enumerate() {
+        let [x, y, w, h] = surface.rect;
+        let alpha = if surface.water {
             "\"$translucent\" \"1\"\n"
         } else {
             ""
         };
-        fs::write(materials.join(format!("{id}{suffix}.vmt")),format!("\"VertexLitGeneric\"\n{{\n\"$basetexture\" \"models/garryscape/{namespace}/regions/{id}\"\n{alpha}}}\n"))?;
+        let shader = if surface.water {
+            "GarryscapeAtlasWater"
+        } else {
+            "GarryscapeAtlas"
+        };
+        let t = surface.tint;
+        fs::write(materials.join(format!("{id}_{i}.vmt")),format!("\"VertexLitGeneric\"\n{{\n\"EGSMShader\" \"{shader}\"\n\"$basetexture\" \"models/garryscape/{namespace}/regions/{id}\"\n\"$atlasrect\" \"[{x} {y} {w} {h}]\"\n\"$atlasinfo\" \"[{} {w} {h} {}]\"\n\"$tint\" \"[{} {} {} {}]\"\n{alpha}}}\n",baked.size,if w>0 {w.ilog2()}else{0},t[0],t[1],t[2],t[3]))?;
     }
+    fs::write(
+        preview.join("open_in_blender.py"),
+        include_str!("../../../tools/preview_atlas.py"),
+    )?;
     dmx::write(baked, &source, namespace, id)?;
     fs::write(root.join("game/gameinfo.txt"),"\"GameInfo\"\n{\n\"game\" \"Garryscape asset build\"\n\"FileSystem\"\n{\n\"SteamAppId\" \"4000\"\n\"SearchPaths\"\n{\n\"game\" \"|gameinfo_path|.\"\n}\n}\n}\n")?;
     fs::write(
         root.join("manifest.json"),
         serde_json::to_vec_pretty(&serde_json::json!({
-            "schema":1,"region":id,"namespace":namespace,"triangles":baked.triangles.len(),"trianglesPerFloor":baked.plane_triangles,
-            "tiles":baked.tiles,"uniqueBakedTiles":baked.unique_tiles,"atlasSize":baked.size,"textureCount":1,"collision":false,
+            "schema":2,"region":id,"namespace":namespace,"triangles":baked.triangles.len(),"trianglesPerFloor":baked.plane_triangles,
+            "tiles":baked.tiles,"uniqueImages":baked.unique_tiles,"atlasSize":baked.size,"textureCount":1,"collision":false,"padding":0,"resizedImages":0,
+            "materialCount":baked.materials.len(),"materials":baked.materials,"atlasImages":baked.atlas_images,
+            "shaderModule":"EGSM","underwaterTriangles":baked.underwater_triangles,
+            "nativeSurfaceTriangles":baked.triangles.iter().filter(|t|!t.underwater).count(),
             "waterTriangles":baked.triangles.iter().filter(|t|t.water).count(),
             "sourceBounds":baked.bounds,"model":format!("models/garryscape/{namespace}/regions/{id}.mdl"),
             "previewCameraLocal":[0.,0.,baked.bounds[1][2]+1200.],"previewPitch":89,
         }))?,
     )?;
-    println!(
-        "glTF: {}",
-        preview.join(id).join(format!("{id}.gltf")).display()
-    );
+    println!("glTF: {}", preview.join(format!("{id}.gltf")).display());
     println!("QC: {}", source.join("model.qc").display());
     Ok(())
 }

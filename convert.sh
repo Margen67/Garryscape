@@ -69,7 +69,7 @@ CLI="$ROOT/converter/target/release/garryscape-convert"
 BUILD="$OUTPUT/build/$NAME/regions/${RX}_${RY}"
 SOURCE="$BUILD/source/garryscape/$NAME/regions/${RX}_${RY}"
 GAME="$BUILD/game"
-if (( PREVIEW )); then echo "Preview ready: $BUILD/preview/garryscape/$NAME/regions/${RX}_${RY}/${RX}_${RY}.gltf"; exit 0; fi
+if (( PREVIEW )); then echo "Preview ready: $BUILD/preview/${RX}_${RY}.gltf"; exit 0; fi
 echo "Addon destination: $ADDON"
 MODEL="$GAME/models/garryscape/$NAME/regions/${RX}_${RY}"
 # Keep failed compiler inputs and logs outside the addon for diagnosis.
@@ -94,9 +94,14 @@ for suffix in mdl vvd dx90.vtx dx80.vtx sw.vtx; do
     asset="$MODEL.$suffix"
     [[ ! -f $asset ]] || copy_changed "$asset" "$ADDON/models/garryscape/$NAME/regions/$(basename -- "$asset")"
 done
-for asset in "$GAME/materials/models/garryscape/$NAME/regions/"*; do copy_changed "$asset" "$ADDON/materials/models/garryscape/$NAME/regions/$(basename -- "$asset")"; done
+for asset in "$GAME/materials/models/garryscape/$NAME/regions/${RX}_${RY}.vtf" "$GAME/materials/models/garryscape/$NAME/regions/${RX}_${RY}_"*.vmt; do
+    copy_changed "$asset" "$ADDON/materials/models/garryscape/$NAME/regions/$(basename -- "$asset")"
+done
 copy_changed "$ROOT/LICENSE" "$ADDON/LICENSE"
 copy_changed "$ROOT/addons/garryscape/lua/autorun/server/garryscape_preview.lua" "$ADDON/lua/autorun/server/garryscape_preview.lua"
+copy_changed "$ROOT/addons/garryscape/lua/autorun/client/garryscape_shader.lua" "$ADDON/lua/autorun/client/garryscape_shader.lua"
+copy_changed "$ROOT/addons/garryscape/lua/garryscape/atlas_shader.lua" "$ADDON/lua/garryscape/atlas_shader.lua"
 copy_changed "$BUILD/manifest.json" "$ADDON/data/garryscape/terrain_preview.json"
 echo "Installed compiled region and preview Lua in $ADDON"
 echo 'Sources, glTF and compile.log remain in the output directory.'
+echo 'The atlas materials require EGSM on the game client. See README.md.'

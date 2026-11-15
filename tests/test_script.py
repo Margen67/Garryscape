@@ -17,7 +17,7 @@ s=b/'source/garryscape'/ns/'regions'/key;s.mkdir(parents=True,exist_ok=True)
 (s/'model.qc').write_text(f'$modelname "garryscape/{ns}/regions/{key}.mdl"\\n')
 (b/'game').mkdir(exist_ok=True)
 m=b/'game/materials/models/garryscape'/ns/'regions';m.mkdir(parents=True,exist_ok=True)
-(m/f'{key}.vmt').write_text('material');(m/f'{key}.vtf').write_text('texture')
+(m/f'{key}_0.vmt').write_text('material');(m/f'{key}.vtf').write_text('texture')
 (b/'manifest.json').write_text(json.dumps({'model':f'models/garryscape/{ns}/regions/{key}.mdl'}))
 (b/'complete.json').write_text('fingerprint')
 '''
@@ -44,6 +44,10 @@ class Script(unittest.TestCase):
         shutil.copy(REPO/'LICENSE',self.repo/'LICENSE')
         (self.repo/'addons/garryscape/lua/autorun/server').mkdir(parents=True)
         shutil.copy(REPO/'addons/garryscape/lua/autorun/server/garryscape_preview.lua',self.repo/'addons/garryscape/lua/autorun/server')
+        (self.repo/'addons/garryscape/lua/autorun/client').mkdir(parents=True)
+        (self.repo/'addons/garryscape/lua/garryscape').mkdir(parents=True)
+        shutil.copy(REPO/'addons/garryscape/lua/autorun/client/garryscape_shader.lua',self.repo/'addons/garryscape/lua/autorun/client')
+        shutil.copy(REPO/'addons/garryscape/lua/garryscape/atlas_shader.lua',self.repo/'addons/garryscape/lua/garryscape')
         (self.repo/'converter/target/release').mkdir(parents=True)
         self.exe(self.repo/'converter/target/release/garryscape-convert',CLI)
         self.bin=self.path/'bin';self.bin.mkdir();self.exe(self.bin/'cargo','#!/bin/sh\nexit 0\n')
@@ -67,6 +71,8 @@ class Script(unittest.TestCase):
         self.assertEqual(model.stat().st_mtime_ns,stamp)
         self.assertFalse(any(p.suffix in {'.qc','.dmx','.glb','.gltf','.bin','.png'} for p in self.addon.rglob('*')))
         self.assertTrue((self.addon/'lua/autorun/server/garryscape_preview.lua').is_file())
+        self.assertTrue((self.addon/'lua/autorun/client/garryscape_shader.lua').is_file())
+        self.assertTrue((self.addon/'lua/garryscape/atlas_shader.lua').is_file())
     def test_default_installs_under_garrysmod_directory(self):
         game=self.path/'Steam/GarrysMod'
         self.env['TEST_GAME_ROOT']=str(game)

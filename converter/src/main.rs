@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-mod bake;
 mod binary;
 mod cache;
 mod export;
+mod region;
 mod terrain;
 mod textures;
 
@@ -34,7 +34,7 @@ fn run() -> Result<()> {
         println!(
             "{}",
             serde_json::to_string_pretty(
-                &serde_json::json!({"mapGroups":cache.index(5)?.len(),"lumbridgeFound":region.is_some(),"verifiedGroups":cache.verified})
+                &serde_json::json!({"mapGroups":cache.index(5)?.len(),"lumbridgeFound":region.is_some(),"underwaterFound":region.as_ref().is_some_and(|r|r.underwater.is_some()),"verifiedGroups":cache.verified})
             )?
         );
         return Ok(());
@@ -111,7 +111,7 @@ fn run() -> Result<()> {
     }
     eprintln!("Decoding 2009Scape region {x}/{y}; scale {scale}");
     let world = terrain::World::load(&mut cache, x as i32, y as i32)?;
-    let baked = bake::build(&mut cache, &world, scale)?;
+    let baked = region::build(&mut cache, &world, scale)?;
     export::write(&baked, &build, &name, &id)?;
     fs::write(
         build.join("cache-crcs.json"),
@@ -132,15 +132,13 @@ fn run() -> Result<()> {
 }
 fn outputs_present(build: &Path, name: &str, id: &str) -> Result<bool> {
     for path in [
-        build.join(format!("preview/garryscape/{name}/regions/{id}/{id}.gltf")),
-        build.join(format!("preview/garryscape/{name}/regions/{id}/{id}.bin")),
-        build.join(format!("preview/garryscape/{name}/regions/{id}/{id}.png")),
+        build.join(format!("preview/{id}.gltf")),
+        build.join(format!("preview/{id}.bin")),
+        build.join(format!("preview/{id}.png")),
+        build.join("preview/open_in_blender.py"),
         build.join(format!("source/garryscape/{name}/regions/{id}/model.qc")),
         build.join(format!(
             "game/materials/models/garryscape/{name}/regions/{id}.vtf"
-        )),
-        build.join(format!(
-            "game/materials/models/garryscape/{name}/regions/{id}.vmt"
         )),
         build.join("manifest.json"),
     ] {
@@ -150,14 +148,15 @@ fn outputs_present(build: &Path, name: &str, id: &str) -> Result<bool> {
     }
     let manifest: serde_json::Value =
         serde_json::from_slice(&fs::read(build.join("manifest.json"))?)?;
-    if manifest["waterTriangles"].as_u64().unwrap_or(0) > 0
-        && !build
+    for i in 0..manifest["materialCount"].as_u64().unwrap_or(0) {
+        if !build
             .join(format!(
-                "game/materials/models/garryscape/{name}/regions/{id}_water.vmt"
+                "game/materials/models/garryscape/{name}/regions/{id}_{i}.vmt"
             ))
             .is_file()
-    {
-        return Ok(false);
+        {
+            return Ok(false);
+        }
     }
     let source = build.join(format!("source/garryscape/{name}/regions/{id}"));
     let qc = fs::read_to_string(source.join("model.qc"))?;

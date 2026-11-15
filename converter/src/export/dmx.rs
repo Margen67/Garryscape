@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Source model-1/keyvalues2 DMX, one mesh per input. Several QC bodies still
 //! compile into ONE MDL. This avoids StudioMDL's fragile large-DMX mesh importer.
-use crate::bake::{Baked, Triangle};
+use crate::region::{RegionMesh, Triangle};
 use anyhow::Result;
 use std::{fmt::Write, fs, path::Path};
 const BODY_TRIANGLES: usize = 2400;
@@ -94,10 +94,10 @@ pub fn body(triangles: &[Triangle], id: &str, number: usize) -> String {
     d.end();
     d.transform(6, "mesh_transform");
     d.transform(8, "mesh_transform");
-    let materials = [false, true]
-        .into_iter()
-        .filter(|water| triangles.iter().any(|t| t.water == *water))
-        .collect::<Vec<_>>();
+    let materials = triangles
+        .iter()
+        .map(|t| t.material)
+        .collect::<std::collections::BTreeSet<_>>();
     d.begin("DmeMesh", 7, "terrain");
     d.field("visible", "bool", "1");
     d.reference("bindState", 9);
@@ -107,7 +107,7 @@ pub fn body(triangles: &[Triangle], id: &str, number: usize) -> String {
         "faceSets",
         &materials
             .iter()
-            .map(|w| if *w { 12 } else { 10 })
+            .map(|index| 20 + index * 2)
             .collect::<Vec<_>>(),
     );
     d.end();
@@ -160,9 +160,9 @@ pub fn body(triangles: &[Triangle], id: &str, number: usize) -> String {
     d.array("jointWeights", "float", (0..count).map(|_| "1".into()));
     d.array("jointIndices", "int", (0..count).map(|_| "0".into()));
     d.end();
-    for water in materials {
-        let base = if water { 12 } else { 10 };
-        let name = format!("{id}{}", if water { "_water" } else { "" });
+    for material in materials {
+        let base = 20 + material * 2;
+        let name = format!("{id}_{material}");
         d.begin("DmeFaceSet", base, &name);
         d.reference("material", base + 1);
         d.array(
@@ -171,7 +171,7 @@ pub fn body(triangles: &[Triangle], id: &str, number: usize) -> String {
             triangles
                 .iter()
                 .enumerate()
-                .filter(|(_, t)| t.water == water)
+                .filter(|(_, t)| t.material == material)
                 .flat_map(|(i, _)| [i as i32 * 3, i as i32 * 3 + 1, i as i32 * 3 + 2, -1])
                 .map(|v| v.to_string()),
         );
@@ -182,7 +182,7 @@ pub fn body(triangles: &[Triangle], id: &str, number: usize) -> String {
     }
     d.text
 }
-pub fn write(baked: &Baked, source: &Path, namespace: &str, id: &str) -> Result<()> {
+pub fn write(baked: &RegionMesh, source: &Path, namespace: &str, id: &str) -> Result<()> {
     let mut qc=format!("$modelname \"garryscape/{namespace}/regions/{id}.mdl\"\n$cdmaterials \"models/garryscape/{namespace}/regions/\"\n$upaxis Z\n$staticprop\n$surfaceprop dirt\n");
     for (i, triangles) in baked.triangles.chunks(BODY_TRIANGLES).enumerate() {
         fs::write(
@@ -198,7 +198,7 @@ pub fn write(baked: &Baked, source: &Path, namespace: &str, id: &str) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bake::Vertex;
+    use crate::region::Vertex;
     #[test]
     fn body_ids_are_unique_and_no_collision() {
         let v = Vertex {
@@ -209,6 +209,8 @@ mod tests {
         let t = Triangle {
             vertices: [v; 3],
             water: false,
+            material: 0,
+            underwater: false,
         };
         let a = body(std::slice::from_ref(&t), "50_50", 0);
         let b = body(&[t], "50_50", 1);

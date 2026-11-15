@@ -85,7 +85,7 @@ def validate(root):
         assert '\n\n' not in vmt and vmt.endswith('}\n')
         assert 'VertexLitGeneric' in vmt and '$surfaceprop' not in vmt
         assert f'models/garryscape/{namespace}/regions/{region}"' in vmt
-    folder = root / f'preview/garryscape/{namespace}/regions/{region}'
+    folder = root / 'preview'
     doc = json.loads((folder / f'{region}.gltf').read_text())
     assert doc['asset']['version'] == '2.0'
     assert len(doc['buffers']) == 1 and doc['buffers'][0]['uri'] == f'{region}.bin'
@@ -100,7 +100,9 @@ def validate(root):
     count = sum(doc['accessors'][p['indices']]['count'] // 3 for p in doc['meshes'][0]['primitives'])
     assert count == manifest['triangles']
     if region == '50_50':
-        assert count == 10733 and manifest['trianglesPerFloor'] == [8847, 1100, 724, 62]
+        assert count == 11475 and manifest['trianglesPerFloor'] == [8847, 1100, 724, 62]
+        assert manifest['underwaterTriangles'] == 742
+        assert manifest['padding'] == 0 and manifest['resizedImages'] == 0
         assert any(m['alphaMode'] == 'BLEND' for m in doc['materials']), 'missing water transparency'
     def array(index, components):
         acc = doc['accessors'][index]

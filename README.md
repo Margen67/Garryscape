@@ -5,7 +5,7 @@ The Rust converter reads the native cache and exports a Blender-preview **glTF f
 **DMX**, QC, and Source materials. Git Bash invokes Garry's Mod's StudioMDL to
 produce one region model. **No SMD and no cache decoding inside GMod.**
 
-The current milestone is **region 50/50, terrain only, all four floors, without
+The current milestone is **region 50/50, terrain only, all four floors plus the underwater floor, without
 collision**. Objects, NPCs, streaming, and gameplay come later. This is a rebuilt
 converter, not the former lost release; see [RECOVERY.md](RECOVERY.md).
 
@@ -64,10 +64,11 @@ For `regions 50 50`, namespace `2009scape`:
 
 ```text
 output/build/2009scape/regions/50_50/
-  preview/garryscape/2009scape/regions/50_50/
+  preview/
     50_50.gltf
     50_50.bin
     50_50.png
+    open_in_blender.py
   source/garryscape/2009scape/regions/50_50/
     model.qc
     reference_0.dmx ... reference_4.dmx
@@ -77,8 +78,7 @@ output/build/2009scape/regions/50_50/
     models/garryscape/2009scape/regions/50_50.{mdl,vvd,dx90.vtx,...}
     materials/models/garryscape/2009scape/regions/
       50_50.vtf
-      50_50.vmt
-      50_50_water.vmt
+      50_50_0.vmt ... 50_50_22.vmt
   manifest.json
   cache-crcs.json
   complete.json
@@ -95,26 +95,71 @@ The several single-mesh DMX inputs are QC bodies in **one final `.mdl`**, not
 separate region entities. They keep each importer input below 7,200 vertices.
 The format is Source's `model 1` / `keyvalues2 1` DMX.
 
-All floor textures and transitions are baked offline into **one texture** with
-128×128 source samples and 16-pixel extruded gutters. Opaque ground and translucent water
-use two stock `VertexLitGeneric` materials referencing that same VTF. Source
-handles lighting and culling; Lua performs no per-frame rendering or baking.
-The glTF references the full-resolution PNG atlas and a separate binary mesh
-buffer in the same folder. It has one mesh and uses metres/Y-up; DMX uses
-Source inches/Z-up. Both incorporate `--scale`.
+The converter retains the cache's shaped terrain triangles and the original
+texture-repeat scale. It loads both the four-floor surface map (`m50_50`) and
+its separate underwater terrain (`um50_50`). It does not simplify faces, add
+replacement geometry, split triangles for UV seams, or rasterize terrain shapes
+and transitions into per-tile images. The coordinate conversion changes axes,
+uses a region-local origin, and applies `--scale`.
 
-The full four-floor 50/50 bake has 10,733 triangles. Its lossless RGBA8888
-8192×8192 VTF, including mipmaps, is approximately **341 MiB**. This is the memory
-tradeoff of retaining original samples in one texture. Textures are not silently
-resized to fit; exports exceeding an 8192px atlas fail explicitly. Atlas packing
-copies each baked image pixel-for-pixel and adds padding; exporting the PNG does
-not resize or recompress it. VTF mipmaps are separate reduced-detail levels; the
-base image remains full resolution.
+The single atlas contains native procedural texture images at their native
+64×64 or 128×128 resolution. Only byte-identical RGBA images of the same
+size are deduplicated. No image is enlarged, reduced, tinted, or given a border.
+Empty space in the power-of-two atlas is unused; it is not an image gutter.
+Floor colour modulation remains a material parameter. Normal VTF mipmaps retain
+the full-resolution base level.
 
-Water is a static bake of the cache texture with transparency, not a recreation
-of RT4's animated HD water renderer. Cache environmental lights are
-parsed, but not reproduced as dynamic Source lights. Stock Source lighting will
-therefore differ from RuneScape's lighting.
+Region 50/50 has **10,733 surface triangles and 742 underwater triangles**.
+The native-image atlas is **1024×1024**, about **5.33 MiB** as lossless RGBA8888
+with mipmaps, replacing the former 8192×8192 per-tile bake. The manifest records
+native image rectangles and CRCs so pixel preservation can be checked.
+
+### Required model shader: EGSM
+
+Keeping one atlas while independently repeating each original image requires
+an atlas-aware material shader. Garryscape includes its Lua/HLSL shader source,
+using **[Akabenko's x86-64 EGSM module](https://github.com/Akabenko/EGSM)**.
+GShader's post-processing library alone does not supply this native model shader.
+
+Install EGSM using [its installation instructions](https://github.com/Akabenko/EGSM#how-to-install):
+place the module in `garrysmod/lua/bin`, install its shader support files, and
+load it from the menu realm as instructed by EGSM. Restart GMod afterward.
+The converter installs Garryscape's shader source alongside the addon; it does
+not download or distribute the external DLL or edit `menu.lua` automatically.
+
+The shaders register once on the client. Native Source entities handle drawing;
+there are no per-frame Lua model conversions or draw loops. The shader wraps
+UVs within each native image, including bilinear/trilinear filtering at image
+edges without neighboring atlas images bleeding in. Source ambient lighting,
+dynamic lights, and flashlight support use EGSM's standard Source constants.
+The image is unchanged and the source UVs retain their original repeat frequency.
+
+**Windows/EGSM GPU execution still needs in-game verification.** The module is
+required for correct native-model atlas rendering; stock `VertexLitGeneric`
+does not independently repeat packed images. Missing EGSM produces a diagnostic.
+The previous texture-baked ground transitions have been removed; the exact RT4
+HD ground blend passes are not yet ported. HD water animation, depth fog and
+the original RT4 lighting model are not
+recreated by this atlas shader. Cache water RGBA is retained rather than replaced
+with an invented alpha clamp. Underwater geometry is exported independently of
+that remaining water-rendering work.
+
+### Blender preview
+
+Standard glTF material descriptions cannot express repeating subrectangles of
+one atlas. The `.gltf` therefore carries native UVs and atlas metadata, and its
+companion Blender loader builds the equivalent material nodes without changing
+mesh vertices, triangles, or UVs:
+
+```bash
+# After conversion, open the preview in a new Blender process:
+'/c/Program Files (x86)/Steam/steamapps/common/Blender/blender.exe' --python \
+  "$PWD/output/build/2009scape/regions/50_50/preview/open_in_blender.py"
+```
+
+Use that loader for correct atlas wrapping. Plain glTF import preserves the
+geometry and metadata but does not configure the custom atlas material. The
+folder contains one PNG atlas and one binary mesh buffer; no GLB or SMD is used.
 
 Unchanged input/configuration reuses converted files and the compiled model.
 Changing the StudioMDL executable triggers compilation again; `--rebuild` forces
@@ -150,7 +195,7 @@ python tests/test_script.py
 python tests/test_preview.py  # optional liblua 5.3/5.4 for the lifecycle harness
 ```
 
-For visual inspection, import the `.gltf` file into Blender; Blender is not required to
+For visual inspection, use the Blender loader above; Blender is not required to
 convert or compile. Linux can export the inputs using `--preview-only`; actual
 Windows StudioMDL and in-game rendering must be checked on Windows. Automated
 script tests use a fake compiler to verify orchestration, not to claim a real

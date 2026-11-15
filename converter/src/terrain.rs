@@ -15,25 +15,38 @@ pub struct Tile {
 }
 pub struct Region {
     pub tiles: Vec<Tile>,
+    pub underwater: Option<Vec<Tile>>,
 }
 impl Region {
     pub fn tile(&self, p: usize, x: usize, y: usize) -> Tile {
         self.tiles[p * 4096 + x * 64 + y]
     }
     pub fn decode(bytes: &[u8], rx: i32, ry: i32) -> Result<Self> {
+        Self::decode_layer(bytes, rx, ry, None)
+    }
+    fn decode_layer(bytes: &[u8], rx: i32, ry: i32, surface: Option<&[Tile]>) -> Result<Self> {
         let mut r = Reader::new(bytes);
-        let mut tiles = vec![Tile::default(); 16384];
-        for p in 0..4 {
+        let planes = if surface.is_some() { 1 } else { 4 };
+        let mut tiles = vec![Tile::default(); planes * 4096];
+        for p in 0..planes {
             for x in 0..64 {
                 for y in 0..64 {
                     let i = p * 4096 + x * 64 + y;
-                    let previous = if p == 0 { 0 } else { tiles[i - 4096].height };
+                    let previous = if let Some(base) = surface {
+                        base[i].height
+                    } else if p == 0 {
+                        0
+                    } else {
+                        tiles[i - 4096].height
+                    };
                     let mut ended = false;
                     for _ in 0..64 {
                         let op = r.u8()?;
                         match op {
                             0 => {
-                                tiles[i].height = if p == 0 {
+                                tiles[i].height = if surface.is_some() {
+                                    previous
+                                } else if p == 0 {
                                     ground_height(rx * 64 + x as i32, ry * 64 + y as i32)
                                 } else {
                                     previous - 240
@@ -43,7 +56,11 @@ impl Region {
                             }
                             1 => {
                                 let h = r.u8()?;
-                                tiles[i].height = previous - if h == 1 { 0 } else { h as i32 * 8 };
+                                tiles[i].height = if surface.is_some() {
+                                    previous + h as i32 * 8
+                                } else {
+                                    previous - if h == 1 { 0 } else { h as i32 * 8 }
+                                };
                                 ended = true;
                                 break;
                             }
@@ -100,23 +117,42 @@ impl Region {
                 n => bail!("Unknown map extension {n} at {}", r.position - 1),
             }
         }
-        Ok(Self { tiles })
+        Ok(Self {
+            tiles,
+            underwater: None,
+        })
     }
 }
-pub fn load(cache: &mut Cache, x: i32, y: i32) -> Result<Option<Region>> {
-    let name = format!("m{x}_{y}");
+fn named(cache: &mut Cache, name: &str) -> Result<Option<Vec<u8>>> {
     let hash = name
         .bytes()
         .fold(0u32, |h, c| h.wrapping_mul(31).wrapping_add(c as u32));
     let index = cache.index(5)?;
     if let Some((&id, group)) = index.iter().find(|(_, g)| g.name_hash == Some(hash)) {
-        let file = *group.files.first().context("Empty terrain group")?;
-        Ok(Some(
-            Region::decode(&cache.file(5, id, file)?, x, y).with_context(|| name)?,
-        ))
+        Ok(Some(cache.file(
+            5,
+            id,
+            *group.files.first().context("Empty terrain group")?,
+        )?))
     } else {
         Ok(None)
     }
+}
+pub fn load(cache: &mut Cache, x: i32, y: i32) -> Result<Option<Region>> {
+    let name = format!("m{x}_{y}");
+    let Some(data) = named(cache, &name)? else {
+        return Ok(None);
+    };
+    let mut region = Region::decode(&data, x, y).with_context(|| name)?;
+    let name = format!("um{x}_{y}");
+    if let Some(data) = named(cache, &name)? {
+        region.underwater = Some(
+            Region::decode_layer(&data, x, y, Some(&region.tiles))
+                .with_context(|| name)?
+                .tiles,
+        );
+    }
+    Ok(Some(region))
 }
 pub struct World {
     pub regions: BTreeMap<(i32, i32), Region>,
@@ -157,15 +193,24 @@ impl World {
             )
         }
     }
-    pub fn height(&self, p: usize, x: i32, y: i32) -> f32 {
-        -(self.tile(p, x, y).height as f32)
+    pub fn underwater_tile(&self, x: i32, y: i32) -> Option<Tile> {
+        let key = (self.x + x.div_euclid(64), self.y + y.div_euclid(64));
+        self.regions
+            .get(&key)
+            .and_then(|r| r.underwater.as_ref())
+            .map(|tiles| tiles[x.rem_euclid(64) as usize * 64 + y.rem_euclid(64) as usize])
     }
-    pub fn normal(&self, p: usize, x: i32, y: i32) -> [f32; 3] {
-        normalize([
-            self.height(p, x - 1, y) - self.height(p, x + 1, y),
-            self.height(p, x, y - 1) - self.height(p, x, y + 1),
-            256.0,
-        ])
+    pub fn layer_tile(&self, underwater: bool, p: usize, x: i32, y: i32) -> Tile {
+        if underwater {
+            self.underwater_tile(x, y)
+                .unwrap_or_else(|| self.tile(0, x, y))
+        } else {
+            self.tile(p, x, y)
+        }
+    }
+    pub fn layer_normal(&self, underwater: bool, p: usize, x: i32, y: i32) -> [f32; 3] {
+        let h = |x, y| -(self.layer_tile(underwater, p, x, y).height as f32);
+        normalize([h(x - 1, y) - h(x + 1, y), h(x, y - 1) - h(x, y + 1), 256.])
     }
 }
 pub fn normalize(v: [f32; 3]) -> [f32; 3] {
@@ -287,6 +332,21 @@ pub fn vertex(mut code: u8, rotation: u8) -> ([f32; 2], [f32; 4]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn underwater_height_is_a_depth_from_the_surface_and_one_is_not_zero() {
+        let mut surface = vec![Tile::default(); 16384];
+        for t in &mut surface {
+            t.height = -128;
+        }
+        let mut bytes = vec![];
+        for _ in 0..4096 {
+            bytes.extend_from_slice(&[1, 1]);
+        }
+        let result = Region::decode_layer(&bytes, 50, 50, Some(&surface)).unwrap();
+        assert_eq!(result.tiles.len(), 4096);
+        assert_eq!(result.tile(0, 0, 0).height, -120);
+        assert_eq!(surface[0].height, -128);
+    }
     #[test]
     fn truncation_rejected() {
         assert!(Region::decode(&[0; 16], 50, 50).is_err());

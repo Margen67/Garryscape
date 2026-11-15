@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Lossless RGBA8888 VTF 7.2. Full mip chain, generated once offline.
-use crate::bake::Baked;
+use crate::region::RegionMesh;
 use anyhow::Result;
 use std::{
     fs::File,
     io::{BufWriter, Write},
     path::Path,
 };
-pub fn write(baked: &Baked, path: &Path) -> Result<()> {
+pub fn write(baked: &RegionMesh, path: &Path) -> Result<()> {
     let mut levels = vec![];
     let mut size = baked.size;
     let mut previous = &baked.pixels[..];

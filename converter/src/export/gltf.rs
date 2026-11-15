@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-use crate::bake::Baked;
-use anyhow::{Context, Result};
+use crate::region::RegionMesh;
+use anyhow::Result;
 use serde_json::{json, Value};
 use std::{fs, path::Path};
 fn pad(v: &mut Vec<u8>, byte: u8) {
@@ -22,7 +22,7 @@ fn view(bin: &mut Vec<u8>, views: &mut Vec<Value>, data: &[u8], target: Option<u
 fn floats(values: impl IntoIterator<Item = f32>) -> Vec<u8> {
     values.into_iter().flat_map(f32::to_le_bytes).collect()
 }
-pub fn write(baked: &Baked, png: &[u8], path: &Path) -> Result<()> {
+pub fn write(baked: &RegionMesh, png: &[u8], path: &Path, id: &str) -> Result<()> {
     let mut bin = vec![];
     let mut views = vec![];
     let vertices = baked
@@ -75,12 +75,13 @@ pub fn write(baked: &Baked, png: &[u8], path: &Path) -> Result<()> {
     ];
     let mut primitives = vec![];
     let mut materials = vec![];
-    for water in [false, true] {
+    for (material, surface) in baked.materials.iter().enumerate() {
+        let water = surface.water;
         let indices = baked
             .triangles
             .iter()
             .enumerate()
-            .filter(|(_, t)| t.water == water)
+            .filter(|(_, t)| t.material == material)
             .flat_map(|(i, _)| [i as u32 * 3, i as u32 * 3 + 1, i as u32 * 3 + 2])
             .collect::<Vec<_>>();
         if indices.is_empty() {
@@ -95,16 +96,17 @@ pub fn write(baked: &Baked, png: &[u8], path: &Path) -> Result<()> {
         accessors.push(
             json!({"bufferView":index,"componentType":5125,"count":indices.len(),"type":"SCALAR"}),
         );
-        let material = materials.len();
-        materials.push(json!({"name":if water {"water"}else{"terrain"},"pbrMetallicRoughness":{"baseColorTexture":{"index":0},"metallicFactor":0,"roughnessFactor":1},"alphaMode":if water {"BLEND"}else{"OPAQUE"},"doubleSided":false}));
+        let pbr = if surface.texture >= 0 {
+            json!({"baseColorTexture":{"index":0},"baseColorFactor":surface.tint,"metallicFactor":0,"roughnessFactor":1})
+        } else {
+            json!({"baseColorFactor":surface.tint,"metallicFactor":0,"roughnessFactor":1})
+        };
+        materials.push(json!({"name":format!("{id}_{material}"),"pbrMetallicRoughness":pbr,"alphaMode":if water {"BLEND"}else{"OPAQUE"},"doubleSided":false,
+            "extras":{"garryscapeAtlas":{"rect":surface.rect,"atlasSize":baked.size,"nativeTexture":surface.texture,"requiresAtlasWrap":true,"binding":material}}}));
         primitives.push(json!({"attributes":{"POSITION":0,"NORMAL":1,"TEXCOORD_0":2},"indices":accessor,"material":material,"mode":4}));
     }
     pad(&mut bin, 0);
     fs::create_dir_all(path)?;
-    let id = path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .context("Invalid glTF directory name")?;
     let buffer_name = format!("{id}.bin");
     let image_name = format!("{id}.png");
     let document = json!({"asset":{"version":"2.0","generator":"Garryscape offline converter"},"scene":0,"scenes":[{"nodes":[0]}],"nodes":[{"name":"terrain","mesh":0}],"meshes":[{"name":"region","primitives":primitives}],"materials":materials,"textures":[{"sampler":0,"source":0}],"samplers":[{"magFilter":9729,"minFilter":9987,"wrapS":33071,"wrapT":33071}],"images":[{"uri":image_name}],"buffers":[{"uri":buffer_name,"byteLength":bin.len()}],"bufferViews":views,"accessors":accessors});
@@ -121,7 +123,7 @@ pub fn write(baked: &Baked, png: &[u8], path: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bake::{Triangle, Vertex};
+    use crate::region::{Triangle, Vertex};
     #[test]
     fn external_texture_is_written_verbatim_at_original_dimensions() {
         let positions = [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]];
@@ -130,14 +132,24 @@ mod tests {
             normal: [0., 0., 1.],
             uv: [0., 0.],
         });
-        let baked = Baked {
+        let baked = RegionMesh {
             triangles: vec![Triangle {
                 vertices,
                 water: false,
+                material: 0,
+                underwater: false,
             }],
             pixels: vec![
                 255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 10, 20, 30, 255,
             ],
+            materials: vec![crate::region::Surface {
+                rect: [0, 0, 2, 2],
+                tint: [1.; 4],
+                texture: 0,
+                water: false,
+            }],
+            atlas_images: vec![],
+            underwater_triangles: 0,
             size: 2,
             tiles: 1,
             unique_tiles: 1,
@@ -155,7 +167,7 @@ mod tests {
                     .as_nanos()
             ))
             .join("fixture");
-        write(&baked, &encoded, &directory).unwrap();
+        write(&baked, &encoded, &directory, "fixture").unwrap();
         assert_eq!(fs::read(directory.join("fixture.png")).unwrap(), encoded);
         let decoder = png::Decoder::new(std::io::Cursor::new(&encoded));
         let mut reader = decoder.read_info().unwrap();

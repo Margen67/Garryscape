@@ -8,7 +8,7 @@ import os
 import unittest
 
 class Preview(unittest.TestCase):
-    def test_lifecycle(self):
+    def run_lua(self,filename):
         name = ctypes.util.find_library('lua5.4') or ctypes.util.find_library('lua5.3')
         if not name:
             self.skipTest('liblua 5.3/5.4 is not installed; GMod does not need it')
@@ -27,13 +27,18 @@ class Preview(unittest.TestCase):
         try:
             os.chdir(Path(__file__).resolve().parents[1])
             lib.luaL_openlibs(state)
-            status = lib.luaL_loadfilex(state, b'tests/test_preview.lua', None)
+            status = lib.luaL_loadfilex(state, filename.encode(), None)
             if status == 0:
                 status = lib.lua_pcallk(state, 0, 0, 0, 0, None)
             self.assertEqual(status, 0, lib.lua_tolstring(state, -1, None))
         finally:
             lib.lua_close(state)
             os.chdir(old_cwd)
+
+    def test_lifecycle(self):
+        self.run_lua('tests/test_preview.lua')
+    def test_native_shader_setup(self):
+        self.run_lua('tests/test_atlas_shader.lua')
 
 if __name__ == '__main__':
     unittest.main()

@@ -7,7 +7,6 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
 };
-const N: usize = 128;
 type Image = Vec<[i32; 3]>;
 #[derive(Clone)]
 struct Op {
@@ -28,6 +27,7 @@ impl Op {
 #[derive(Clone)]
 pub struct Texture {
     pub pixels: Vec<[u8; 4]>,
+    pub size: usize,
     pub effect: u8,
     pub brightness: u8,
     pub boost: u8,
@@ -36,9 +36,38 @@ pub struct Texture {
 pub struct Textures {
     pub images: BTreeMap<i32, Texture>,
     effects: Vec<u8>,
+    sizes: Vec<usize>,
     brightness: Vec<u8>,
     boost: Vec<u8>,
     active: HashSet<i32>,
+}
+#[cfg(test)]
+impl Textures {
+    pub fn fixture(images: BTreeMap<i32, (usize, Vec<[u8; 4]>)>) -> Self {
+        Self {
+            images: images
+                .into_iter()
+                .map(|(id, (size, pixels))| {
+                    (
+                        id,
+                        Texture {
+                            pixels,
+                            size,
+                            effect: 0,
+                            brightness: 0,
+                            boost: 0,
+                            dependency: vec![],
+                        },
+                    )
+                })
+                .collect(),
+            effects: vec![],
+            sizes: vec![],
+            brightness: vec![],
+            boost: vec![],
+            active: HashSet::new(),
+        }
+    }
 }
 impl Textures {
     pub fn new(cache: &mut Cache) -> Result<Self> {
@@ -49,6 +78,7 @@ impl Textures {
             .map(|_| r.u8().map(|b| b == 1))
             .collect::<Result<Vec<_>>>()?;
         let mut effects = vec![0; count];
+        let mut sizes = vec![128; count];
         let mut brightness = vec![0; count];
         let mut boost = vec![0; count];
         for field in 0..9 {
@@ -61,6 +91,7 @@ impl Textures {
                 } else {
                     let b = r.u8()?;
                     match field {
+                        2 => sizes[i] = if b == 1 { 64 } else { 128 },
                         6 => effects[i] = b,
                         5 => brightness[i] = b,
                         4 => boost[i] = b,
@@ -73,6 +104,7 @@ impl Textures {
         Ok(Self {
             images: BTreeMap::new(),
             effects,
+            sizes,
             brightness,
             boost,
             active: HashSet::new(),
@@ -90,6 +122,10 @@ impl Textures {
         Ok(())
     }
     fn generate(&mut self, cache: &mut Cache, id: i32) -> Result<Texture> {
+        let n = *self
+            .sizes
+            .get(id as usize)
+            .context("Texture metadata missing")?;
         let data = cache.file(9, id as u32, 0)?;
         let mut r = Reader::new(&data);
         let count = r.u8()? as usize;
@@ -208,35 +244,40 @@ impl Textures {
         // Revision 530 appends sampler/animation flags after the two graph roots.
         let mut results = HashMap::new();
         let mut visiting = HashSet::new();
-        let c = self.eval(cache, &ops, colour, &mut results, &mut visiting)?;
-        let a = self.eval(cache, &ops, alpha, &mut results, &mut visiting)?;
+        let c = self.eval(cache, &ops, colour, &mut results, &mut visiting, n)?;
+        let a = self.eval(cache, &ops, alpha, &mut results, &mut visiting, n)?;
         let _blurred = r.u8()? == 1;
         let flip = r.u8()? == 1;
         r.take(7)?;
         r.finish()?;
-        let mut dependency = vec![[0; 3]; N * N];
-        for y in 0..N {
-            for x in 0..N {
-                let dst = if flip { x * N + y } else { y * N + x };
-                dependency[dst] = c[y * N + x].map(|v| (v >> 4).clamp(0, 255) * 16);
+        let mut dependency = vec![[0; 3]; n * n];
+        for y in 0..n {
+            for x in 0..n {
+                let dst = if flip { x * n + y } else { y * n + x };
+                dependency[dst] = c[y * n + x].map(|v| (v >> 4).clamp(0, 255) * 16);
             }
         }
-        let mut pixels = vec![[0; 4]; N * N];
-        for y in 0..N {
-            for x in 0..N {
-                let src = y * N + (N - 1 - x);
-                let dst = if flip { x * N + y } else { y * N + x };
+        let mut pixels = vec![[0; 4]; n * n];
+        for y in 0..n {
+            for x in 0..n {
+                let src = y * n + (n - 1 - x);
+                let dst = if flip { x * n + y } else { y * n + x };
                 for channel in 0..3 {
                     pixels[dst][channel] = (((c[src][channel] >> 4).clamp(0, 255) as f64 / 255.)
                         .powf(0.7)
                         * 255.) as u8;
                 }
-                pixels[dst][3] = (a[src][0] >> 4).clamp(0, 255) as u8;
+                pixels[dst][3] = if pixels[dst][..3] == [0, 0, 0] {
+                    0
+                } else {
+                    (a[src][0] >> 4).clamp(0, 255) as u8
+                };
             }
         }
-        eprintln!("Baked cache texture {id}: {} operations", ops.len());
+        eprintln!("Decoded procedural texture {id}: {} operations", ops.len());
         Ok(Texture {
             pixels,
+            size: n,
             dependency,
             effect: self.effects.get(id as usize).copied().unwrap_or(0),
             brightness: self.brightness.get(id as usize).copied().unwrap_or(0),
@@ -250,6 +291,7 @@ impl Textures {
         index: usize,
         results: &mut HashMap<usize, Arc<Image>>,
         visiting: &mut HashSet<usize>,
+        n: usize,
     ) -> Result<Arc<Image>> {
         if let Some(img) = results.get(&index) {
             return Ok(img.clone());
@@ -258,9 +300,9 @@ impl Textures {
         let op = ops.get(index).context("Invalid texture input")?;
         let mut input = vec![];
         for &i in &op.inputs {
-            input.push(self.eval(cache, ops, i, results, visiting)?);
+            input.push(self.eval(cache, ops, i, results, visiting, n)?);
         }
-        let mut out = vec![[0; 3]; N * N];
+        let mut out = vec![[0; 3]; n * n];
         let scalar = |v: i32| [v; 3];
         match op.kind {
             0 => out.fill(scalar(op.v(0, 255) * 4096 / 255)),
@@ -273,14 +315,14 @@ impl Textures {
                 ]);
             }
             2 | 3 => {
-                for y in 0..N {
-                    for x in 0..N {
-                        out[y * N + x] =
-                            scalar((if op.kind == 2 { x } else { y }) as i32 * 4096 / N as i32);
+                for y in 0..n {
+                    for x in 0..n {
+                        out[y * n + x] =
+                            scalar((if op.kind == 2 { x } else { y }) as i32 * 4096 / n as i32);
                     }
                 }
             }
-            4 => bricks(op, &mut out)?,
+            4 => bricks(op, &mut out, n)?,
             5 => {
                 let hx = op.v(0, 1);
                 let hy = op.v(1, 1);
@@ -288,24 +330,24 @@ impl Textures {
                     (0..=32).contains(&hx) && (0..=32).contains(&hy),
                     "Blur too large"
                 );
-                let mut pass = vec![[0; 3]; N * N];
+                let mut pass = vec![[0; 3]; n * n];
                 let ix = 65536 / (2 * hx + 1);
                 let iy = 65536 / (2 * hy + 1);
-                for y in 0..N {
-                    for x in 0..N {
+                for y in 0..n {
+                    for x in 0..n {
                         for c in 0..3 {
                             let sum = (-hx..=hx)
-                                .map(|dx| input[0][y * N + wrap(x as i32 + dx)][c])
+                                .map(|dx| input[0][y * n + wrap(x as i32 + dx, n)][c])
                                 .sum::<i32>();
-                            pass[y * N + x][c] = sum * ix / 65536;
+                            pass[y * n + x][c] = sum * ix / 65536;
                         }
                     }
                 }
-                for y in 0..N {
-                    for x in 0..N {
+                for y in 0..n {
+                    for x in 0..n {
                         for c in 0..3 {
-                            out[y * N + x][c] = (-hy..=hy)
-                                .map(|dy| pass[wrap(y as i32 + dy) * N + x][c])
+                            out[y * n + x][c] = (-hy..=hy)
+                                .map(|dy| pass[wrap(y as i32 + dy, n) * n + x][c])
                                 .sum::<i32>()
                                 * iy
                                 / 65536;
@@ -374,11 +416,11 @@ impl Textures {
                 }
             }
             9 => {
-                for y in 0..N {
-                    for x in 0..N {
-                        let xx = if op.v(0, 1) == 1 { N - 1 - x } else { x };
-                        let yy = if op.v(1, 1) == 1 { N - 1 - y } else { y };
-                        out[y * N + x] = input[0][yy * N + xx];
+                for y in 0..n {
+                    for x in 0..n {
+                        let xx = if op.v(0, 1) == 1 { n - 1 - x } else { x };
+                        let yy = if op.v(1, 1) == 1 { n - 1 - y } else { y };
+                        out[y * n + x] = input[0][yy * n + xx];
                     }
                 }
             }
@@ -391,10 +433,11 @@ impl Textures {
                 }
             }
             13 => {
-                for y in 0..N {
-                    for x in 0..N {
-                        let n = (x as i32 * 4096 / N as i32) + (y as i32 * 4096 / N as i32) * 57;
-                        let h = n ^ (n << 1);
+                for y in 0..n {
+                    for x in 0..n {
+                        let hash_input =
+                            (x as i32 * 4096 / n as i32) + (y as i32 * 4096 / n as i32) * 57;
+                        let h = hash_input ^ (hash_input << 1);
                         let v = h
                             .wrapping_mul(h)
                             .wrapping_mul(15731)
@@ -402,35 +445,35 @@ impl Textures {
                             .wrapping_mul(h)
                             .wrapping_add(1376312589)
                             & 0x7fffffff;
-                        out[y * N + x] = scalar((4096 - v / 262144) % 4096);
+                        out[y * n + x] = scalar((4096 - v / 262144) % 4096);
                     }
                 }
             }
-            15 => voronoi(op, &mut out)?,
+            15 => voronoi(op, &mut out, n)?,
             19 => {
-                for y in 0..N {
-                    for x in 0..N {
-                        let i = y * N + x;
+                for y in 0..n {
+                    for x in 0..n {
+                        let i = y * n + x;
                         let a = (input[1][i][0] >> 4) & 255;
                         let angle = a as f64 / 255. * std::f64::consts::TAU;
                         let amp = (input[2][i][0] * op.v(0, 32768) * 16) >> 12;
                         let xx = x as i32 + ((((angle.cos() * 4096.) as i32 * amp) >> 12) >> 12);
                         let yy = y as i32 + ((((angle.sin() * 4096.) as i32 * amp) >> 12) >> 12);
-                        out[i] = input[0][wrap(yy) * N + wrap(xx)];
+                        out[i] = input[0][wrap(yy, n) * n + wrap(xx, n)];
                     }
                 }
             }
             20 => {
                 let (h, v) = (op.v(0, 4), op.v(1, 4));
                 ensure!(
-                    h > 0 && v > 0 && h <= N as i32 && v <= N as i32,
+                    h > 0 && v > 0 && h <= n as i32 && v <= n as i32,
                     "Invalid tile count"
                 );
-                for y in 0..N {
-                    for x in 0..N {
-                        let xx = (x % (N / h as usize)) * h as usize;
-                        let yy = (y % (N / v as usize)) * v as usize;
-                        out[y * N + x] = input[0][yy * N + xx];
+                for y in 0..n {
+                    for x in 0..n {
+                        let xx = (x % (n / h as usize)) * h as usize;
+                        let yy = (y % (n / v as usize)) * v as usize;
+                        out[y * n + x] = input[0][yy * n + xx];
                     }
                 }
             }
@@ -459,15 +502,21 @@ impl Textures {
                     *o = i.map(|v| a + ((v * (b - a)) >> 12));
                 }
             }
-            32 => emboss(op, &input[0], &mut out),
-            34 => perlin(op, &mut out)?,
+            32 => emboss(op, &input[0], &mut out, n),
+            34 => perlin(op, &mut out, n)?,
             36 => {
                 let id = op.v(0, -1);
                 ensure!(id >= 0, "Missing texture dependency");
                 self.load(cache, id)?;
-                out.clone_from(&self.images[&id].dependency);
+                let dep = &self.images[&id];
+                for y in 0..n {
+                    for x in 0..n {
+                        out[y * n + x] =
+                            dep.dependency[(y * dep.size / n) * dep.size + x * dep.size / n];
+                    }
+                }
             }
-            38 => lines(op, &mut out)?,
+            38 => lines(op, &mut out, n)?,
             18 | 39 => bail!(
                 "Sprite textures require the sprite decoder (operation {})",
                 op.kind
@@ -485,8 +534,8 @@ impl Textures {
         Ok(out)
     }
 }
-fn wrap(x: i32) -> usize {
-    (x & 127) as usize
+fn wrap(x: i32, n: usize) -> usize {
+    (x as usize) & (n - 1)
 }
 struct Random(u64);
 impl Random {
@@ -614,12 +663,12 @@ fn fade(t: i32) -> i32 {
     let factor = 40960 + (((6 * t - 61440) * t) >> 12);
     (factor * cubic) >> 12
 }
-fn perlin(op: &Op, out: &mut Image) -> Result<()> {
-    let n = op.v(1, 4) as usize;
-    ensure!((1..=12).contains(&n), "Invalid octave count");
+fn perlin(op: &Op, out: &mut Image, n: usize) -> Result<()> {
+    let octaves = op.v(1, 4) as usize;
+    ensure!((1..=12).contains(&octaves), "Invalid octave count");
     let persistence = op.v(2, 1638);
     let mut amps = vec![];
-    for i in 0..n {
+    for i in 0..octaves {
         let a = if persistence > 0 {
             (((persistence as f32 / 4096.) as f64).powi(i as i32) * 4096.) as i32 as i16 as i32
         } else {
@@ -637,16 +686,16 @@ fn perlin(op: &Op, out: &mut Image) -> Result<()> {
     let sy = op.v(6, op.v(3, 4));
     ensure!(sx > 0 && sy > 0, "Invalid noise scale");
     let p = permutations(op.v(4, 0))?;
-    for y in 0..N {
-        for x in 0..N {
+    for y in 0..n {
+        for x in 0..n {
             let mut value = 0;
             for (oct, &amp) in amps.iter().enumerate() {
                 if amp.abs() <= 8 {
                     continue;
                 }
                 let freq = 1 << oct;
-                let xx = x as i32 * 4096 / N as i32 * sx * freq;
-                let yy = y as i32 * 4096 / N as i32 * sy * freq;
+                let xx = x as i32 * 4096 / n as i32 * sx * freq;
+                let yy = y as i32 * 4096 / n as i32 * sy * freq;
                 let (ix, iy) = (xx >> 12, yy >> 12);
                 let (nx, ny) = (
                     if ix + 1 >= sx * freq { 0 } else { ix + 1 },
@@ -670,12 +719,12 @@ fn perlin(op: &Op, out: &mut Image) -> Result<()> {
             if op.v(0, 1) == 1 {
                 value = (value >> 1) + 2048;
             }
-            out[y * N + x] = [value; 3];
+            out[y * n + x] = [value; 3];
         }
     }
     Ok(())
 }
-fn voronoi(op: &Op, out: &mut Image) -> Result<()> {
+fn voronoi(op: &Op, out: &mut Image, n: usize) -> Result<()> {
     let seed = op.v(1, 0);
     let p = permutations(seed)?;
     let mut rng = Random::new(seed);
@@ -687,10 +736,10 @@ fn voronoi(op: &Op, out: &mut Image) -> Result<()> {
     }
     let (sx, sy) = (op.v(5, op.v(0, 5)), op.v(6, op.v(0, 5)));
     ensure!(sx > 0 && sy > 0, "Invalid Voronoi scale");
-    for y in 0..N {
-        for x in 0..N {
-            let xx = x as i32 * 4096 / N as i32 * sx + 2048;
-            let yy = y as i32 * 4096 / N as i32 * sy + 2048;
+    for y in 0..n {
+        for x in 0..n {
+            let xx = x as i32 * 4096 / n as i32 * sx + 2048;
+            let yy = y as i32 * 4096 / n as i32 * sy + 2048;
             let mut near = [i32::MAX; 4];
             for j in (yy >> 12) - 1..=(yy >> 12) + 1 {
                 let py = p[((if j >= sy { j - sy } else { j }) & 255) as usize] as i32;
@@ -729,12 +778,12 @@ fn voronoi(op: &Op, out: &mut Image) -> Result<()> {
                 4 => near[3],
                 n => bail!("Unknown Voronoi mode {n}"),
             };
-            out[y * N + x] = [v; 3];
+            out[y * n + x] = [v; 3];
         }
     }
     Ok(())
 }
-fn emboss(op: &Op, input: &Image, out: &mut Image) {
+fn emboss(op: &Op, input: &Image, out: &mut Image, n: usize) {
     let az = op.v(1, 3216) as f32 / 4096.;
     let el = op.v(2, 3216) as f32 / 4096.;
     let mut light = [
@@ -752,14 +801,16 @@ fn emboss(op: &Op, input: &Image, out: &mut Image) {
             *v = (*v << 12) / scale;
         }
     }
-    let mult = (op.v(0, 4096) * (N as i32 * 32)) >> 12;
-    for y in 0..N {
-        for x in 0..N {
+    let mult = (op.v(0, 4096) * (n as i32 * 32)) >> 12;
+    for y in 0..n {
+        for x in 0..n {
             let dx = (mult
-                * (input[y * N + wrap(x as i32 - 1)][0] - input[y * N + wrap(x as i32 + 1)][0]))
+                * (input[y * n + wrap(x as i32 - 1, n)][0]
+                    - input[y * n + wrap(x as i32 + 1, n)][0]))
                 >> 12;
             let dy = (mult
-                * (input[wrap(y as i32 + 1) * N + x][0] - input[wrap(y as i32 - 1) * N + x][0]))
+                * (input[wrap(y as i32 + 1, n) * n + x][0]
+                    - input[wrap(y as i32 - 1, n) * n + x][0]))
                 >> 12;
             let a = (dx >> 4).abs().min(255);
             let b = (dy >> 4).abs().min(255);
@@ -767,11 +818,11 @@ fn emboss(op: &Op, input: &Image, out: &mut Image) {
             let value = ((light[0] * ((inv * dx) >> 8)) >> 12)
                 + ((light[1] * ((inv * dy) >> 8)) >> 12)
                 + ((light[2] * ((inv * 4096) >> 8)) >> 12);
-            out[y * N + x] = [value; 3];
+            out[y * n + x] = [value; 3];
         }
     }
 }
-fn bricks(op: &Op, out: &mut Image) -> Result<()> {
+fn bricks(op: &Op, out: &mut Image, n: usize) -> Result<()> {
     let cols = op.v(0, 4) as usize;
     let rows = op.v(1, 8) as usize;
     ensure!(cols > 0 && rows > 0, "Invalid brick grid");
@@ -803,16 +854,16 @@ fn bricks(op: &Op, out: &mut Image) -> Result<()> {
     }
     ys[rows] = 4096;
     let margin = op.v(6, 81) / 2;
-    for y in 0..N {
-        let yy = (y as i32 * 4096 / N as i32 + op.v(5, 0)).rem_euclid(4096);
+    for y in 0..n {
+        let yy = (y as i32 * 4096 / n as i32 + op.v(5, 0)).rem_euclid(4096);
         let row = (1..=rows).find(|&r| yy < ys[r]).unwrap_or(rows) - 1;
-        for x in 0..N {
+        for x in 0..n {
             let offset = if (row + 1) % 2 != 0 {
                 -op.v(4, 1024)
             } else {
                 op.v(4, 1024)
             };
-            let xx = (x as i32 * 4096 / N as i32 + ((w * offset) >> 12)).rem_euclid(4096);
+            let xx = (x as i32 * 4096 / n as i32 + ((w * offset) >> 12)).rem_euclid(4096);
             let col = (1..=cols).find(|&c| xx < xs[row][c]).unwrap_or(cols) - 1;
             let v = if yy > ys[row] + margin
                 && yy < ys[row + 1] - margin
@@ -823,12 +874,12 @@ fn bricks(op: &Op, out: &mut Image) -> Result<()> {
             } else {
                 0
             };
-            out[y * N + x] = [v; 3];
+            out[y * n + x] = [v; 3];
         }
     }
     Ok(())
 }
-fn lines(op: &Op, out: &mut Image) -> Result<()> {
+fn lines(op: &Op, out: &mut Image, n: usize) -> Result<()> {
     let mut rng = Random::new(op.v(0, 0));
     let spread = op.v(4, 4096);
     for _ in 0..op.v(1, 2000) {
@@ -838,7 +889,7 @@ fn lines(op: &Op, out: &mut Image) -> Result<()> {
             op.v(3, 0)
         };
         let angle = ((a >> 4) & 255) as f64 / 255. * std::f64::consts::TAU;
-        let (mut x0, mut y0) = (rng.next(N as i32)?, rng.next(N as i32)?);
+        let (mut x0, mut y0) = (rng.next(n as i32)?, rng.next(n as i32)?);
         let (mut x1, mut y1) = (
             x0 + (((angle.cos() * 4096.) as i32 * op.v(2, 16)) >> 12),
             y0 + (((angle.sin() * 4096.) as i32 * op.v(2, 16)) >> 12),
@@ -865,16 +916,16 @@ fn lines(op: &Op, out: &mut Image) -> Result<()> {
         for x in x0..x1 {
             error += dy;
             let value = slope * (x - x0) + base;
-            let line = wrap(yy);
+            let line = wrap(yy, n);
             if error > 0 {
                 yy += step;
                 error -= dx;
             }
-            let pixel = wrap(x);
+            let pixel = wrap(x, n);
             let index = if steep {
-                line * N + pixel
+                line * n + pixel
             } else {
-                pixel * N + line
+                pixel * n + line
             };
             out[index] = [value; 3];
         }
@@ -884,6 +935,26 @@ fn lines(op: &Op, out: &mut Image) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn perlin_respects_native_resolution_without_resizing() {
+        let op = Op {
+            kind: 34,
+            fields: BTreeMap::new(),
+            inputs: vec![],
+            mono: true,
+        };
+        let mut small = vec![[0; 3]; 64 * 64];
+        let mut large = vec![[0; 3]; 128 * 128];
+        perlin(&op, &mut small, 64).unwrap();
+        perlin(&op, &mut large, 128).unwrap();
+        for y in 0..64 {
+            for x in 0..64 {
+                assert_eq!(small[y * 64 + x], large[y * 2 * 128 + x * 2]);
+            }
+        }
+        assert_eq!(wrap(-1, 64), 63);
+        assert_eq!(wrap(-1, 128), 127);
+    }
     #[test]
     fn java_random_sequence() {
         let mut r = Random::new(0);
