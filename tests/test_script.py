@@ -53,10 +53,12 @@ class Script(unittest.TestCase):
         self.env=dict(os.environ,PATH=str(self.bin)+os.pathsep+os.environ['PATH'],COUNTER=str(self.counter))
     def tearDown(self):self.tmp.cleanup()
     def exe(self,p,text):p.write_text(text);p.chmod(0o755)
-    def run_script(self,*extra,fail=None):
+    def run_script(self,*extra,fail=None,default_addon=False):
         env=self.env.copy()
         if fail:env['FAIL_MODE']=fail
-        return subprocess.run(['bash',str(self.repo/'convert.sh'),'regions','50','50','--cache',str(self.cache),'--studiomdl',str(self.compiler),'--addon',str(self.addon),'--output','relative output',*extra],env=env,cwd=self.path,text=True,capture_output=True)
+        args=['bash',str(self.repo/'convert.sh'),'regions','50','50','--cache',str(self.cache),'--studiomdl',str(self.compiler),'--output','relative output',*extra]
+        if not default_addon:args += ['--addon',str(self.addon)]
+        return subprocess.run(args,env=env,cwd=self.path,text=True,capture_output=True)
     def test_success_reuse_and_no_source_install(self):
         r=self.run_script();self.assertEqual(r.returncode,0,r.stderr+r.stdout)
         model=self.addon/'models/garryscape/2009scape/regions/50_50.mdl';stamp=model.stat().st_mtime_ns
@@ -65,6 +67,22 @@ class Script(unittest.TestCase):
         self.assertEqual(model.stat().st_mtime_ns,stamp)
         self.assertFalse(any(p.suffix in {'.qc','.dmx','.glb'} for p in self.addon.rglob('*')))
         self.assertTrue((self.addon/'lua/autorun/server/garryscape_preview.lua').is_file())
+    def test_default_installs_under_garrysmod_directory(self):
+        game=self.path/'Steam/GarrysMod'
+        self.env['TEST_GAME_ROOT']=str(game)
+        self.exe(self.bin/'cygpath','''#!/usr/bin/env python3
+import os,sys
+path=sys.argv[2]
+if sys.argv[1]=='-u' and path.startswith('C:/Program Files (x86)/Steam/steamapps/common/GarrysMod/'):
+ path=os.environ['TEST_GAME_ROOT']+'/'+path.split('/GarrysMod/',1)[1]
+print(path)
+''')
+        r=self.run_script(default_addon=True);self.assertEqual(r.returncode,0,r.stderr+r.stdout)
+        addon=game/'garrysmod/addons/garryscape'
+        self.assertTrue((addon/'models/garryscape/2009scape/regions/50_50.mdl').is_file())
+        self.assertTrue((addon/'materials/models/garryscape/2009scape/regions/50_50.vtf').is_file())
+        self.assertTrue((addon/'lua/autorun/server/garryscape_preview.lua').is_file())
+        self.assertFalse((game/'addons/garryscape').exists())
     def test_rebuild_recompiles(self):
         self.assertEqual(self.run_script().returncode,0)
         self.assertEqual(self.run_script('--rebuild').returncode,0)

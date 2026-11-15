@@ -27,12 +27,12 @@ Defaults:
 | Scale | `0.68` |
 | Namespace | `2009scape` |
 | StudioMDL | `C:/Program Files (x86)/Steam/steamapps/common/GarrysMod/bin/win64/studiomdl.exe` |
-| Addon | `C:/Program Files (x86)/Steam/steamapps/common/GarrysMod/addons/garryscape` |
+| Addon | `C:/Program Files (x86)/Steam/steamapps/common/GarrysMod/garrysmod/addons/garryscape` |
 | Working output | `output/` beside `convert.sh` |
 
-The addon default follows the requested path exactly. If your installation loads
-addons from `GarrysMod/garrysmod/addons`, supply that destination with `--addon`.
-The script does not edit game search paths or download a cache.
+The addon default is the installed game’s `garrysmod/addons/garryscape` directory.
+Use `--addon` for a different Steam library. The script prints the destination
+before compilation and does not edit game search paths or download a cache.
 
 The cache must contain `main_file_cache.dat2` and its `main_file_cache.idx*` files
 (a `LIVE/` subdirectory and `.dat` suffixes on index files are also accepted).
@@ -119,12 +119,16 @@ Failed StudioMDL inputs and logs are retained, and a failed build is not install
 
 ## Map preview
 
-On **`garryscape.bsp` only**, the server Lua loader creates a native, non-solid
-`prop_dynamic_override` at **`0 0 -12000`**. It enables noclip and positions players
-**1,200 units above the exported terrain bounds**, looking down at **`89 0 0`**,
-on spawn. This follows the subsequent request to put the camera above the terrain
-instead of the originally specified `0 0 -13200`. The terrain also respawns after
-map cleanup. Other maps are unaffected.
+On **`garryscape.bsp` only**, the server Lua script enables noclip and teleports players on spawn
+**1,200 units above the exported terrain bounds**, looking down at **`89 0 0`**.
+It uses the installed manifest to calculate that position, with `0 0 -10400` as
+its fallback. This follows the request to place the camera above the terrain
+instead of the originally specified `0 0 -13200`.
+
+Lua does not spawn terrain or perform rendering. Place the
+compiled region model separately at **`0 0 -12000`**, for example in Hammer.
+Other maps are unaffected. Noclip prevents falling through the terrain while
+collision is not implemented.
 
 ## Validation
 
@@ -142,8 +146,8 @@ For visual inspection, import the GLB into Blender; Blender is not required to
 convert or compile. Linux can export the inputs using `--preview-only`; actual
 Windows StudioMDL and in-game rendering must be checked on Windows. Automated
 script tests use a fake compiler to verify orchestration, not to claim a real
-MDL compilation. The Lua harness checks map isolation, native entity cleanup,
-missing-model errors, and deferred player placement without running Source.
+MDL compilation. The Lua harness checks map isolation and deferred player placement, and verifies
+that it enables noclip without spawning entities.
 
 ## References
 

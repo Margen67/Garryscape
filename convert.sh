@@ -32,7 +32,7 @@ SCALE=0.68
 NAME=2009scape
 OUTPUT="$ROOT/output"
 STUDIOMDL='C:/Program Files (x86)/Steam/steamapps/common/GarrysMod/bin/win64/studiomdl.exe'
-ADDON='C:/Program Files (x86)/Steam/steamapps/common/GarrysMod/addons/garryscape'
+ADDON='C:/Program Files (x86)/Steam/steamapps/common/GarrysMod/garrysmod/addons/garryscape'
 PREVIEW=0
 REBUILD=()
 while (( $# )); do
@@ -70,6 +70,7 @@ BUILD="$OUTPUT/build/$NAME/regions/${RX}_${RY}"
 SOURCE="$BUILD/source/garryscape/$NAME/regions/${RX}_${RY}"
 GAME="$BUILD/game"
 if (( PREVIEW )); then echo "Preview ready: $BUILD/preview/garryscape/$NAME/regions/${RX}_${RY}.glb"; exit 0; fi
+echo "Addon destination: $ADDON"
 MODEL="$GAME/models/garryscape/$NAME/regions/${RX}_${RY}"
 # Keep failed compiler inputs and logs outside the addon for diagnosis.
 TOOL_HASH=$(cksum "$STUDIOMDL")
