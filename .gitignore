@@ -15,3 +15,10 @@
 *.qc
 *.qci
 main_file_cache.*
+*.bsp
+*.lin
+*.prt
+*.log
+*.vmx
+*.exe
+*.dll
