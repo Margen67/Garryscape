@@ -125,8 +125,9 @@ It uses the installed manifest to calculate that position, with `0 0 -10400` as
 its fallback. This follows the request to place the camera above the terrain
 instead of the originally specified `0 0 -13200`.
 
-Lua does not spawn terrain or perform rendering. Place the
-compiled region model separately at **`0 0 -12000`**, for example in Hammer.
+Lua automatically spawns the compiled region model at **`0 0 -12000`** and
+replaces it after map cleanup. The native Source entity handles rendering;
+Lua does not decode cache files or perform per-frame rendering.
 Other maps are unaffected. Noclip prevents falling through the terrain while
 collision is not implemented.
 
@@ -146,8 +147,8 @@ For visual inspection, import the GLB into Blender; Blender is not required to
 convert or compile. Linux can export the inputs using `--preview-only`; actual
 Windows StudioMDL and in-game rendering must be checked on Windows. Automated
 script tests use a fake compiler to verify orchestration, not to claim a real
-MDL compilation. The Lua harness checks map isolation and deferred player placement, and verifies
-that it enables noclip without spawning entities.
+MDL compilation. The Lua harness checks map isolation, terrain spawning and
+cleanup, missing-model diagnostics, and deferred player placement with noclip.
 
 ## References
 
