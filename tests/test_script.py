@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
 """Test Git Bash orchestration with a fake compiler, not a real MDL compile."""
 import os
 from pathlib import Path
@@ -27,6 +28,7 @@ args=sys.argv[1:]; assert args[0]=='-game';game=pathlib.Path(args[1]); qc=pathli
 with open(os.environ['COUNTER'],'a') as f:f.write('compile\\n')
 mode=os.environ.get('FAIL_MODE','')
 if mode=='exit':sys.exit(3)
+if mode=='nothing':sys.exit(0)
 if mode=='message':print('ERROR: bad input');sys.exit(0)
 model=re.search(r'"([^" ]+\\.mdl)"',qc.read_text()).group(1)
 p=game/'models'/model;p.parent.mkdir(parents=True,exist_ok=True)
@@ -39,6 +41,7 @@ class Script(unittest.TestCase):
         self.path = Path(self.tmp.name)
         self.repo = self.path/'repo with spaces';self.repo.mkdir()
         shutil.copy(REPO/'convert.sh',self.repo/'convert.sh')
+        shutil.copy(REPO/'LICENSE',self.repo/'LICENSE')
         (self.repo/'addons/garryscape/lua/autorun/server').mkdir(parents=True)
         shutil.copy(REPO/'addons/garryscape/lua/autorun/server/garryscape_preview.lua',self.repo/'addons/garryscape/lua/autorun/server')
         (self.repo/'converter/target/release').mkdir(parents=True)
@@ -62,6 +65,15 @@ class Script(unittest.TestCase):
         self.assertEqual(model.stat().st_mtime_ns,stamp)
         self.assertFalse(any(p.suffix in {'.qc','.dmx','.glb'} for p in self.addon.rglob('*')))
         self.assertTrue((self.addon/'lua/autorun/server/garryscape_preview.lua').is_file())
+    def test_rebuild_recompiles(self):
+        self.assertEqual(self.run_script().returncode,0)
+        self.assertEqual(self.run_script('--rebuild').returncode,0)
+        self.assertEqual(self.counter.read_text().count('compile'),2)
+    def test_stale_outputs_do_not_hide_empty_compile(self):
+        self.assertEqual(self.run_script().returncode,0)
+        r=self.run_script('--rebuild',fail='nothing')
+        self.assertNotEqual(r.returncode,0)
+        self.assertIn('did not produce',r.stderr)
     def test_failure_is_not_installed(self):
         for mode in ['exit','message']:
             with self.subTest(mode=mode):

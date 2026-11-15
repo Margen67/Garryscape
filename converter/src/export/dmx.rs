@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Source model-1/keyvalues2 DMX, one mesh per input. Several QC bodies still
 //! compile into ONE MDL. This avoids StudioMDL's fragile large-DMX mesh importer.
 use crate::bake::{Baked, Triangle};

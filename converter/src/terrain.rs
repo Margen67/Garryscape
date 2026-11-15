@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Revision 530 tile decoding and shaped floor geometry. Shape tables adapted from
 //! dennisdev/rs-map-viewer (BSD-2-Clause; see third_party/rs-map-viewer-LICENSE).
 use crate::{binary::Reader, cache::Cache};

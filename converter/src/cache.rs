@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Native JS5 disk cache reader. Input files are read-only; group CRCs are checked.
 use crate::binary::Reader;
 use anyhow::{bail, ensure, Context, Result};

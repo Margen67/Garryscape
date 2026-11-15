@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Bake floor blending into one atlas. Nothing in this module runs in GMod.
 use crate::{
     binary::Reader,
@@ -371,8 +372,10 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<Baked> {
             images.len()
         );
     }
-    // Atlas islands keep the original 128x128 samples plus a two-pixel gutter.
-    let pitch = 132;
+    // Keep the original 128x128 samples. Sixteen-pixel gutters prevent
+    // neighboring atlas islands bleeding together through common mip levels.
+    let gutter = 16;
+    let pitch = 128 + 2 * gutter;
     let mut size = 256usize;
     while (size / pitch) * (size / pitch) < images.len() {
         size *= 2;
@@ -385,8 +388,8 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<Baked> {
         let oy = i / cols * pitch;
         for y in 0..pitch {
             for x in 0..pitch {
-                let src = ((y as i32 - 2).clamp(0, 127) as usize * 128
-                    + (x as i32 - 2).clamp(0, 127) as usize)
+                let src = ((y as i32 - gutter as i32).clamp(0, 127) as usize * 128
+                    + (x as i32 - gutter as i32).clamp(0, 127) as usize)
                     * 4;
                 let dst = ((oy + y) * size + ox + x) * 4;
                 pixels[dst..dst + 4].copy_from_slice(&image[src..src + 4]);
@@ -416,9 +419,9 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<Baked> {
                     z * unit,
                 ];
                 let uv = [
-                    (patch.image % cols * pitch + 2) as f32 / size as f32
+                    (patch.image % cols * pitch + gutter) as f32 / size as f32
                         + xy[0] * 128. / size as f32,
-                    (patch.image / cols * pitch + 2) as f32 / size as f32
+                    (patch.image / cols * pitch + gutter) as f32 / size as f32
                         + xy[1] * 128. / size as f32,
                 ];
                 for c in 0..3 {

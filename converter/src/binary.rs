@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use anyhow::{bail, ensure, Result};
 pub struct Reader<'a> {
     pub data: &'a [u8],

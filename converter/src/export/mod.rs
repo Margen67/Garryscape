@@ -1,8 +1,9 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 pub mod dmx;
 pub mod glb;
 pub mod vtf;
 use crate::bake::Baked;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::{fs, path::Path};
 pub fn png(baked: &Baked) -> Result<Vec<u8>> {
     let mut output = vec![];
@@ -54,16 +55,12 @@ pub fn write(baked: &Baked, root: &Path, namespace: &str, id: &str) -> Result<()
         serde_json::to_vec_pretty(&serde_json::json!({
             "schema":1,"region":id,"namespace":namespace,"triangles":baked.triangles.len(),"trianglesPerFloor":baked.plane_triangles,
             "tiles":baked.tiles,"uniqueBakedTiles":baked.unique_tiles,"atlasSize":baked.size,"textureCount":1,"collision":false,
+            "waterTriangles":baked.triangles.iter().filter(|t|t.water).count(),
             "sourceBounds":baked.bounds,"model":format!("models/garryscape/{namespace}/regions/{id}.mdl"),
             "previewCameraLocal":[0.,0.,baked.bounds[1][2]+1200.],"previewPitch":89,
         }))?,
     )?;
     println!("GLB: {}", preview.join(format!("{id}.glb")).display());
     println!("QC: {}", source.join("model.qc").display());
-    ensure_file(&source.join("model.qc"))?;
-    Ok(())
-}
-fn ensure_file(path: &Path) -> Result<()> {
-    fs::metadata(path).with_context(|| format!("Missing {}", path.display()))?;
     Ok(())
 }

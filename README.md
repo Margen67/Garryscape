@@ -80,10 +80,11 @@ output/build/2009scape/regions/50_50/
   cache-crcs.json
   complete.json
   compiled.json
+  compiled-tool.txt
 ```
 
 The addon receives **only** model companions, materials, the small server Lua
-loader, and `data/garryscape/terrain_preview.json`. GLB, DMX, QC, logs, cache files,
+loader, license, and `data/garryscape/terrain_preview.json`. GLB, DMX, QC, logs, cache files,
 and the working `game/` stay outside the addon. Generated assets are ignored by
 Git; commits contain source, scripts, tests, documentation, and notices only.
 
@@ -92,7 +93,7 @@ separate region entities. They keep each importer input below 7,200 vertices.
 The format is Source's `model 1` / `keyvalues2 1` DMX.
 
 All floor textures and transitions are baked offline into **one texture** with
-128×128 source samples and extruded gutters. Opaque ground and translucent water
+128×128 source samples and 16-pixel extruded gutters. Opaque ground and translucent water
 use two stock `VertexLitGeneric` materials referencing that same VTF. Source
 handles lighting and culling; Lua performs no per-frame rendering or baking.
 The GLB embeds the same atlas, has one mesh, and uses metres/Y-up; DMX uses
@@ -109,6 +110,8 @@ parsed, but not reproduced as dynamic Source lights. Stock Source lighting will
 therefore differ from RuneScape's lighting.
 
 Unchanged input/configuration reuses converted files and the compiled model.
+Changing the StudioMDL executable triggers compilation again; `--rebuild` forces
+both conversion and compilation.
 The fingerprint includes converter executable contents, cache-file timestamps
 and sizes, region, namespace, and scale. Use `--rebuild` after manually replacing
 cache data while preserving its timestamps, or to regenerate deliberately.
@@ -149,3 +152,10 @@ MDL compilation.
 - [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer): shaped tile tables
   and procedural texture algorithms. Adapted portions retain its BSD-2-Clause
   notice in [third_party/rs-map-viewer-LICENSE](third_party/rs-map-viewer-LICENSE).
+
+## License
+
+The converter and Lua addon source are licensed under the GNU Affero General
+Public License, version 3 ([AGPL-3.0-only](LICENSE)). Adapted rs-map-viewer code
+retains its BSD-2-Clause notice in `third_party/rs-map-viewer-LICENSE`.
+Game/cache assets are not included or relicensed by this repository.

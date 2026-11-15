@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
 # Git Bash / POSIX entry point. All RuneScape decoding runs in the Rust CLI.
 set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,8 +23,8 @@ native_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; els
 shell_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -u "$1"; else printf '%s\n' "$1"; fi; }
 if [[ $# == 0 || ${1:-} == --help || ${1:-} == -h ]]; then usage; exit 0; fi
 [[ ${1:-} == regions ]] || fail 'Only regions are implemented.'
-[[ $# -ge 3 && $2 =~ ^[0-9]+$ && $3 =~ ^[0-9]+$ ]] || fail 'Specify the region: ./convert.sh regions 50 50'
-TYPE=$1; RX=$((10#$2)); RY=$((10#$3)); shift 3
+[[ $# -ge 3 && $2 =~ ^[0-9]{1,3}$ && $3 =~ ^[0-9]{1,3}$ ]] || fail 'Specify the region: ./convert.sh regions 50 50'
+RX=$((10#$2)); RY=$((10#$3)); shift 3
 (( RX <= 255 && RY <= 255 )) || fail 'Region coordinates must be 0..255.'
 PROFILE=${UserProfile:-${USERPROFILE:-}}
 CACHE=${PROFILE:+$PROFILE/2009scape/cache/runescape}
@@ -71,14 +72,19 @@ GAME="$BUILD/game"
 if (( PREVIEW )); then echo "Preview ready: $BUILD/preview/garryscape/$NAME/regions/${RX}_${RY}.glb"; exit 0; fi
 MODEL="$GAME/models/garryscape/$NAME/regions/${RX}_${RY}"
 # Keep failed compiler inputs and logs outside the addon for diagnosis.
-if [[ ! -f $BUILD/compiled.json ]] || ! cmp -s "$BUILD/complete.json" "$BUILD/compiled.json" || [[ ! -s $MODEL.mdl || ! -s $MODEL.vvd || ! -s $MODEL.dx90.vtx ]]; then
+TOOL_HASH=$(cksum "$STUDIOMDL")
+SAVED_TOOL_HASH=$(cat "$BUILD/compiled-tool.txt" 2>/dev/null || true)
+if (( ${#REBUILD[@]} )) || [[ $TOOL_HASH != "$SAVED_TOOL_HASH" ]] || [[ ! -f $BUILD/compiled.json ]] || ! cmp -s "$BUILD/complete.json" "$BUILD/compiled.json" || [[ ! -s $MODEL.mdl || ! -s $MODEL.vvd || ! -s $MODEL.dx90.vtx ]]; then
     echo "Compiling $SOURCE/model.qc"
+    # Old outputs must not make a compiler that produced nothing look successful.
+    rm -f -- "$MODEL.mdl" "$MODEL.vvd" "$MODEL.dx90.vtx" "$MODEL.dx80.vtx" "$MODEL.sw.vtx"
     if ! (cd -- "$SOURCE" && MSYS2_ARG_CONV_EXCL='*' "$STUDIOMDL" -game "$(native_path "$GAME")" "$(native_path "$SOURCE/model.qc")") 2>&1 | tee "$SOURCE/compile.log"; then
         fail "Compilation failed; inputs and log retained at $SOURCE"
     fi
     for suffix in mdl vvd dx90.vtx; do [[ -s $MODEL.$suffix ]] || fail "StudioMDL did not produce $MODEL.$suffix; see $SOURCE/compile.log"; done
     if grep -qi 'ERROR:' "$SOURCE/compile.log"; then fail "StudioMDL reported errors; see $SOURCE/compile.log"; fi
     cp -- "$BUILD/complete.json" "$BUILD/compiled.json"
+    printf '%s\n' "$TOOL_HASH" > "$BUILD/compiled-tool.txt"
 else
     echo 'Using compiled Source model.'
 fi
@@ -88,6 +94,7 @@ for suffix in mdl vvd dx90.vtx dx80.vtx sw.vtx; do
     [[ ! -f $asset ]] || copy_changed "$asset" "$ADDON/models/garryscape/$NAME/regions/$(basename -- "$asset")"
 done
 for asset in "$GAME/materials/models/garryscape/$NAME/regions/"*; do copy_changed "$asset" "$ADDON/materials/models/garryscape/$NAME/regions/$(basename -- "$asset")"; done
+copy_changed "$ROOT/LICENSE" "$ADDON/LICENSE"
 copy_changed "$ROOT/addons/garryscape/lua/autorun/server/garryscape_preview.lua" "$ADDON/lua/autorun/server/garryscape_preview.lua"
 copy_changed "$BUILD/manifest.json" "$ADDON/data/garryscape/terrain_preview.json"
 echo "Installed compiled region and preview Lua in $ADDON"

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Offline revision-530 procedural textures. Fixed-point operations adapted from
 //! rs-map-viewer (BSD-2-Clause; see third_party/rs-map-viewer-LICENSE).
 use crate::{binary::Reader, cache::Cache};
@@ -888,12 +889,6 @@ mod tests {
         let mut r = Random::new(0);
         assert_eq!(r.bits(), 3139482720);
         assert_eq!(r.bits(), 3571011896);
-    }
-    #[test]
-    fn texture_dependency_cycle() {
-        let mut active = HashSet::new();
-        assert!(active.insert(1));
-        assert!(!active.insert(1));
     }
     #[test]
     fn linear_curve() {

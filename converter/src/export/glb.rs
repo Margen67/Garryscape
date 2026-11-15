@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::bake::Baked;
 use anyhow::{ensure, Result};
 use serde_json::{json, Value};

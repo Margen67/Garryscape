@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-only
 -- Native Source assets only. This addon never reads RuneScape cache files.
 -- Terrain preview has no collision; players are put in noclip to inspect it.
 if game.GetMap():lower() ~= "garryscape" then return end

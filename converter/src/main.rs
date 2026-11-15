@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 mod bake;
 mod binary;
 mod cache;
@@ -144,6 +145,17 @@ fn outputs_present(build: &Path, name: &str, id: &str) -> Result<bool> {
         if !path.is_file() {
             return Ok(false);
         }
+    }
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&fs::read(build.join("manifest.json"))?)?;
+    if manifest["waterTriangles"].as_u64().unwrap_or(0) > 0
+        && !build
+            .join(format!(
+                "game/materials/models/garryscape/{name}/regions/{id}_water.vmt"
+            ))
+            .is_file()
+    {
+        return Ok(false);
     }
     let source = build.join(format!("source/garryscape/{name}/regions/{id}"));
     let qc = fs::read_to_string(source.join("model.qc"))?;

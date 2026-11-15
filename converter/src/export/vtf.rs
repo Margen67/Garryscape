@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Lossless RGBA8888 VTF 7.2. Full mip chain, generated once offline.
 use crate::bake::Baked;
 use anyhow::Result;
