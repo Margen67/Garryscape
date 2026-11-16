@@ -28,7 +28,7 @@ def apply_material(material,entry):
     if data['nativeTexture']<0:
         bsdf.inputs['Base Color'].default_value=tint
         return
-    x,y,w,h=data['rect'];side=data['atlasSize']
+    x,y,w,h=data['rect'];width=data['atlasWidth'];height=data['atlasHeight']
     uv=nodes.new('ShaderNodeTexCoord')
     separate=nodes.new('ShaderNodeSeparateXYZ');links.new(uv.outputs['UV'],separate.inputs[0])
     def math(operation,a,b=None):
@@ -48,8 +48,8 @@ def apply_material(material,entry):
         for dx in range(2):
             px=math('FLOORED_MODULO',math('ADD',ix,dx),w)
             py=math('FLOORED_MODULO',math('ADD',iy,dy),h)
-            au=math('DIVIDE',math('ADD',px,x+0.5),side)
-            av=math('SUBTRACT',1,math('DIVIDE',math('ADD',py,y+0.5),side))
+            au=math('DIVIDE',math('ADD',px,x+0.5),width)
+            av=math('SUBTRACT',1,math('DIVIDE',math('ADD',py,y+0.5),height))
             combine=nodes.new('ShaderNodeCombineXYZ');links.new(au,combine.inputs[0]);links.new(av,combine.inputs[1])
             image=nodes.new('ShaderNodeTexImage');image.image=atlas;image.interpolation='Closest';image.extension='EXTEND'
             links.new(combine.outputs[0],image.inputs['Vector'])

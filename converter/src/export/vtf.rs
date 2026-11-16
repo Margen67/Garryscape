@@ -9,12 +9,13 @@ use std::{
 };
 pub fn write(baked: &RegionMesh, path: &Path) -> Result<()> {
     let mut levels = vec![];
-    let mut size = baked.size;
+    let (mut width, mut height) = (baked.width, baked.height);
     let mut previous = &baked.pixels[..];
-    while size > 1 {
-        let next = downsample(previous, size);
+    while width > 1 || height > 1 {
+        let next = downsample(previous, width, height);
         levels.push(next);
-        size /= 2;
+        width = (width / 2).max(1);
+        height = (height / 2).max(1);
         previous = levels.last().unwrap();
     }
     let mut header = [0u8; 80];
@@ -22,8 +23,8 @@ pub fn write(baked: &RegionMesh, path: &Path) -> Result<()> {
     header[4..8].copy_from_slice(&7u32.to_le_bytes());
     header[8..12].copy_from_slice(&2u32.to_le_bytes());
     header[12..16].copy_from_slice(&80u32.to_le_bytes());
-    header[16..18].copy_from_slice(&(baked.size as u16).to_le_bytes());
-    header[18..20].copy_from_slice(&(baked.size as u16).to_le_bytes());
+    header[16..18].copy_from_slice(&(baked.width as u16).to_le_bytes());
+    header[18..20].copy_from_slice(&(baked.height as u16).to_le_bytes());
     header[20..24].copy_from_slice(&(0x2000u32 | 8 | 4 | 2).to_le_bytes());
     header[24..26].copy_from_slice(&1u16.to_le_bytes());
     header[48..52].copy_from_slice(&1f32.to_le_bytes());
@@ -40,17 +41,20 @@ pub fn write(baked: &RegionMesh, path: &Path) -> Result<()> {
     output.flush()?;
     Ok(())
 }
-fn downsample(input: &[u8], size: usize) -> Vec<u8> {
-    let next = size / 2;
-    let mut output = vec![0; next * next * 4];
+fn downsample(input: &[u8], width: usize, height: usize) -> Vec<u8> {
+    let next_width = (width / 2).max(1);
+    let next_height = (height / 2).max(1);
+    let mut output = vec![0; next_width * next_height * 4];
     let linear: Vec<f32> = (0..256).map(|v| (v as f32 / 255.).powf(2.2)).collect();
-    for y in 0..next {
-        for x in 0..next {
+    for y in 0..next_height {
+        for x in 0..next_width {
             let mut rgb = [0.; 3];
             let mut alpha = 0.;
             for dy in 0..2 {
                 for dx in 0..2 {
-                    let i = ((y * 2 + dy) * size + x * 2 + dx) * 4;
+                    let sx = (x * 2 + dx).min(width - 1);
+                    let sy = (y * 2 + dy).min(height - 1);
+                    let i = (sy * width + sx) * 4;
                     let a = input[i + 3] as f32 / 255.;
                     alpha += a;
                     for c in 0..3 {
@@ -58,7 +62,7 @@ fn downsample(input: &[u8], size: usize) -> Vec<u8> {
                     }
                 }
             }
-            let dst = (y * next + x) * 4;
+            let dst = (y * next_width + x) * 4;
             for c in 0..3 {
                 output[dst + c] = if alpha > 0. {
                     (rgb[c] / alpha).powf(1. / 2.2).mul_add(255., 0.).round() as u8
@@ -75,8 +79,25 @@ fn downsample(input: &[u8], size: usize) -> Vec<u8> {
 mod tests {
     use super::*;
     #[test]
+    fn rectangular_mips_keep_the_last_row_or_column_until_one_by_one() {
+        for (width, height) in [(8, 2), (2, 8), (1, 8), (8, 1)] {
+            let mut pixels = vec![0u8; width * height * 4];
+            for p in pixels.chunks_exact_mut(4) {
+                p.copy_from_slice(&[12, 34, 56, 255]);
+            }
+            let (mut w, mut h) = (width, height);
+            while w > 1 || h > 1 {
+                pixels = downsample(&pixels, w, h);
+                w = (w / 2).max(1);
+                h = (h / 2).max(1);
+                assert_eq!(pixels.len(), w * h * 4);
+                assert!(pixels.chunks_exact(4).all(|p| p == [12, 34, 56, 255]));
+            }
+        }
+    }
+    #[test]
     fn alpha_mips_do_not_dark_fringe() {
         let pixels = [255, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        assert_eq!(downsample(&pixels, 2), [255, 0, 0, 64]);
+        assert_eq!(downsample(&pixels, 2, 2), [255, 0, 0, 64]);
     }
 }

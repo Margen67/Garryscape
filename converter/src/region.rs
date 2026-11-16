@@ -83,7 +83,8 @@ pub struct AtlasImage {
 pub struct RegionMesh {
     pub triangles: Vec<Triangle>,
     pub pixels: Vec<u8>,
-    pub size: usize,
+    pub width: usize,
+    pub height: usize,
     pub tiles: usize,
     pub unique_tiles: usize,
     pub bounds: [[f32; 3]; 2],
@@ -93,7 +94,12 @@ pub struct RegionMesh {
     pub atlas_images: Vec<AtlasImage>,
 }
 /// Deduplicate ONLY exact native images, retaining dimensions and every RGBA byte.
-type PackedAtlas = (Vec<u8>, usize, Vec<AtlasImage>, BTreeMap<i32, [usize; 4]>);
+type PackedAtlas = (
+    Vec<u8>,
+    [usize; 2],
+    Vec<AtlasImage>,
+    BTreeMap<i32, [usize; 4]>,
+);
 fn pack(textures: &Textures) -> Result<PackedAtlas> {
     let mut unique: Vec<(&crate::textures::Texture, Vec<i32>)> = vec![];
     for (&id, image) in &textures.images {
@@ -140,13 +146,29 @@ fn pack(textures: &Textures) -> Result<PackedAtlas> {
             "Native textures exceed one 8192px atlas; no resize is permitted"
         );
     };
-    let mut pixels = vec![0u8; side * side * 4];
+    // Crop only unused atlas space. Keep every packed image (including its
+    // transparent pixels), rectangle origin and native dimensions unchanged.
+    let width = placements
+        .iter()
+        .map(|r| r[0] + r[2])
+        .max()
+        .unwrap_or(2)
+        .max(2)
+        .next_power_of_two();
+    let height = placements
+        .iter()
+        .map(|r| r[1] + r[3])
+        .max()
+        .unwrap_or(2)
+        .max(2)
+        .next_power_of_two();
+    let mut pixels = vec![0u8; width * height * 4];
     let mut images = vec![];
     let mut ids = BTreeMap::new();
     for ((image, source_ids), rect) in unique.into_iter().zip(placements) {
         for y in 0..image.size {
             for x in 0..image.size {
-                let dst = ((rect[1] + y) * side + rect[0] + x) * 4;
+                let dst = ((rect[1] + y) * width + rect[0] + x) * 4;
                 pixels[dst..dst + 4].copy_from_slice(&image.pixels[y * image.size + x]);
             }
         }
@@ -160,7 +182,7 @@ fn pack(textures: &Textures) -> Result<PackedAtlas> {
             crc: crc32fast::hash(&bytes),
         });
     }
-    Ok((pixels, side, images, ids))
+    Ok((pixels, [width, height], images, ids))
 }
 pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh> {
     let under = cache
@@ -205,7 +227,7 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh>
         textures.load(cache, id)?;
     }
     textures.images.retain(|id, _| needed.contains(id));
-    let (pixels, size, atlas_images, rects) = pack(&textures)?;
+    let (pixels, [width, height], atlas_images, rects) = pack(&textures)?;
     let mut materials: Vec<Surface> = vec![];
     let mut triangles = vec![];
     let mut tiles = 0;
@@ -347,11 +369,12 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh>
         }
     }
     ensure!(!triangles.is_empty(), "No native terrain geometry");
-    eprintln!("Native geometry: {} surface + {} underwater triangles; {} exact unique images, {}px atlas, no padding",plane_triangles.iter().sum::<usize>(),underwater_triangles,atlas_images.len(),size);
+    eprintln!("Native geometry: {} surface + {} underwater triangles; {} exact unique images, {}x{}px atlas, no padding",plane_triangles.iter().sum::<usize>(),underwater_triangles,atlas_images.len(),width,height);
     Ok(RegionMesh {
         triangles,
         pixels,
-        size,
+        width,
+        height,
         tiles,
         unique_tiles: atlas_images.len(),
         bounds,
@@ -375,7 +398,9 @@ mod tests {
             (2, (128, original.clone())),
             (3, (64, small.clone())),
         ]));
-        let (pixels, side, images, ids) = pack(&textures).unwrap();
+        let (pixels, [width, height], images, ids) = pack(&textures).unwrap();
+        assert_eq!((width, height), (256, 128));
+        assert_eq!(pixels.len(), width * height * 4);
         assert_eq!(images.len(), 2);
         assert_eq!(ids[&1], ids[&2]);
         assert_eq!(ids[&1][2..], [128, 128]);
@@ -384,12 +409,39 @@ mod tests {
             let rect = ids[&id];
             for y in 0..size {
                 for x in 0..size {
-                    let at = ((rect[1] + y) * side + rect[0] + x) * 4;
+                    let at = ((rect[1] + y) * width + rect[0] + x) * 4;
                     assert_eq!(&pixels[at..at + 4], &expected[y * size + x]);
                 }
             }
         }
         assert_eq!(ids[&3][0], ids[&1][0] + 128); // directly adjacent, no gutter
+    }
+    #[test]
+    fn crop_dimensions_follow_occupied_rectangles_for_small_and_large_atlases() {
+        for (count, size, expected) in [
+            (1, 2, [2, 2]),
+            (2, 2, [4, 2]),
+            (19, 128, [1024, 512]),
+            (65, 128, [2048, 1024]),
+        ] {
+            let textures = Textures::fixture(
+                (0..count)
+                    .map(|id| {
+                        // Transparent images are still retained: crop only free space,
+                        // not pixels inside a source image's repeating UV domain.
+                        (id, (size, vec![[id as u8, 13, 17, 0]; size * size]))
+                    })
+                    .collect(),
+            );
+            let (pixels, dimensions, images, _) = pack(&textures).unwrap();
+            assert_eq!(dimensions, expected);
+            assert_eq!(pixels.len(), dimensions[0] * dimensions[1] * 4);
+            for image in images {
+                assert!(image.rect[0] + image.rect[2] <= dimensions[0]);
+                assert!(image.rect[1] + image.rect[3] <= dimensions[1]);
+                assert_eq!(&image.rect[2..], &[size, size]);
+            }
+        }
     }
     #[test]
     fn unsigned_overlay_id() {

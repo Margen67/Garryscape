@@ -8,7 +8,7 @@ use std::{fs, path::Path};
 pub fn png(baked: &RegionMesh) -> Result<Vec<u8>> {
     let mut output = vec![];
     {
-        let mut enc = png::Encoder::new(&mut output, baked.size as u32, baked.size as u32);
+        let mut enc = png::Encoder::new(&mut output, baked.width as u32, baked.height as u32);
         enc.set_color(png::ColorType::Rgba);
         enc.set_depth(png::BitDepth::Eight);
         enc.set_compression(png::Compression::Fast);
@@ -47,7 +47,7 @@ pub fn write(baked: &RegionMesh, root: &Path, namespace: &str, id: &str) -> Resu
             "GarryscapeAtlas"
         };
         let t = surface.tint;
-        fs::write(materials.join(format!("{id}_{i}.vmt")),format!("\"VertexLitGeneric\"\n{{\n\"EGSMShader\" \"{shader}\"\n\"$basetexture\" \"models/garryscape/{namespace}/regions/{id}\"\n\"$atlasrect\" \"[{x} {y} {w} {h}]\"\n\"$atlasinfo\" \"[{} {w} {h} {}]\"\n\"$tint\" \"[{} {} {} {}]\"\n{alpha}}}\n",baked.size,if w>0 {w.ilog2()}else{0},t[0],t[1],t[2],t[3]))?;
+        fs::write(materials.join(format!("{id}_{i}.vmt")),format!("\"VertexLitGeneric\"\n{{\n\"EGSMShader\" \"{shader}\"\n\"$basetexture\" \"models/garryscape/{namespace}/regions/{id}\"\n\"$atlasrect\" \"[{x} {y} {w} {h}]\"\n\"$atlasinfo\" \"[{} {w} {h} {}]\"\n\"$atlasdimensions\" \"[{} {} 0 0]\"\n\"$tint\" \"[{} {} {} {}]\"\n{alpha}}}\n",baked.width,if w>0 {w.ilog2()}else{0},baked.width,baked.height,t[0],t[1],t[2],t[3]))?;
     }
     fs::write(
         preview.join("open_in_blender.py"),
@@ -58,8 +58,8 @@ pub fn write(baked: &RegionMesh, root: &Path, namespace: &str, id: &str) -> Resu
     fs::write(
         root.join("manifest.json"),
         serde_json::to_vec_pretty(&serde_json::json!({
-            "schema":2,"region":id,"namespace":namespace,"triangles":baked.triangles.len(),"trianglesPerFloor":baked.plane_triangles,
-            "tiles":baked.tiles,"uniqueImages":baked.unique_tiles,"atlasSize":baked.size,"textureCount":1,"collision":false,"padding":0,"resizedImages":0,
+            "schema":3,"region":id,"namespace":namespace,"triangles":baked.triangles.len(),"trianglesPerFloor":baked.plane_triangles,
+            "tiles":baked.tiles,"uniqueImages":baked.unique_tiles,"atlasWidth":baked.width,"atlasHeight":baked.height,"textureCount":1,"collision":false,"padding":0,"resizedImages":0,
             "materialCount":baked.materials.len(),"materials":baked.materials,"atlasImages":baked.atlas_images,
             "shaderModule":"EGSM","underwaterTriangles":baked.underwater_triangles,
             "nativeSurfaceTriangles":baked.triangles.iter().filter(|t|!t.underwater).count(),

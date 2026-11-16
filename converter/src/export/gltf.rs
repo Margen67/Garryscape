@@ -102,7 +102,7 @@ pub fn write(baked: &RegionMesh, png: &[u8], path: &Path, id: &str) -> Result<()
             json!({"baseColorFactor":surface.tint,"metallicFactor":0,"roughnessFactor":1})
         };
         materials.push(json!({"name":format!("{id}_{material}"),"pbrMetallicRoughness":pbr,"alphaMode":if water {"BLEND"}else{"OPAQUE"},"doubleSided":false,
-            "extras":{"garryscapeAtlas":{"rect":surface.rect,"atlasSize":baked.size,"nativeTexture":surface.texture,"requiresAtlasWrap":true,"binding":material}}}));
+            "extras":{"garryscapeAtlas":{"rect":surface.rect,"atlasWidth":baked.width,"atlasHeight":baked.height,"nativeTexture":surface.texture,"requiresAtlasWrap":true,"binding":material}}}));
         primitives.push(json!({"attributes":{"POSITION":0,"NORMAL":1,"TEXCOORD_0":2},"indices":accessor,"material":material,"mode":4}));
     }
     pad(&mut bin, 0);
@@ -150,7 +150,8 @@ mod tests {
             }],
             atlas_images: vec![],
             underwater_triangles: 0,
-            size: 2,
+            width: 2,
+            height: 2,
             tiles: 1,
             unique_tiles: 1,
             bounds: [[0., 0., 0.], [1., 1., 0.]],

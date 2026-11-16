@@ -107,12 +107,15 @@ uses a region-local origin, and applies `--scale`.
 The single atlas contains native procedural texture images at their native
 64×64 or 128×128 resolution. Only byte-identical RGBA images of the same
 size are deduplicated. No image is enlarged, reduced, tinted, or given a border.
-Empty space in the power-of-two atlas is unused; it is not an image gutter.
+Unused outer atlas space is cropped to power-of-two width and height independently.
+Transparent pixels inside each packed image are retained. Nothing is resized or
+padded, and mesh geometry and native UVs remain unchanged. The shader and Blender
+loader read per-region dimensions, including larger or rectangular atlases.
 Floor colour modulation remains a material parameter. Normal VTF mipmaps retain
 the full-resolution base level.
 
 Region 50/50 has **10,733 surface triangles and 742 underwater triangles**.
-The native-image atlas is **1024×1024**, about **5.33 MiB** as lossless RGBA8888
+The native-image atlas is **1024×512**, about **2.67 MiB** as lossless RGBA8888
 with mipmaps, replacing the former 8192×8192 per-tile bake. The manifest records
 native image rectangles and CRCs so pixel preservation can be checked.
 

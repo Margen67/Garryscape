@@ -124,8 +124,9 @@ fn run() -> Result<()> {
         )?,
     )?;
     println!(
-        "Exported terrain {x}/{y}: one model, one {}px texture, {} triangles; no collision",
-        baked.size,
+        "Exported terrain {x}/{y}: one model, one {}x{}px texture, {} triangles; no collision",
+        baked.width,
+        baked.height,
         baked.triangles.len()
     );
     Ok(())

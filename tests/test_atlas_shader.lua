@@ -65,6 +65,7 @@ dofile("addons/garryscape/lua/autorun/client/garryscape_shader.lua")
 assert(#errors==0,errors[1])
 for _,name in ipairs({"GarryscapeAtlas","GarryscapeAtlasWater"}) do
     local shader=assert(shaders[name])
+    assert(shader.constants[44]=="$atlasdimensions")
     assert(shader.constants[40]=="$atlasrect" and shader.constants[41]=="$atlasinfo" and shader.constants[42]=="$tint")
 end
 assert(shaders.GarryscapeAtlas.flags==0 and shaders.GarryscapeAtlasWater.flags==MATERIAL_VAR_TRANSLUCENT)

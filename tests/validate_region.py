@@ -77,14 +77,16 @@ def validate(root):
         header = stream.read(80)
     assert header[:4] == b'VTF\0' and struct.unpack_from('<II', header, 4) == (7, 2)
     width, height = struct.unpack_from('<HH', header, 16)
-    assert width == height == manifest['atlasSize']
-    assert header[56] == width.bit_length()
-    assert textures[0].stat().st_size == 80 + sum(4 * (width >> i)**2 for i in range(header[56]))
+    assert (width, height) == (manifest['atlasWidth'], manifest['atlasHeight'])
+    assert width >= 2 and height >= 2 and width & (width-1) == height & (height-1) == 0
+    assert header[56] == max(width, height).bit_length()
+    assert textures[0].stat().st_size == 80 + sum(4 * max(width >> i, 1) * max(height >> i, 1) for i in range(header[56]))
     for path in materials.glob('*.vmt'):
         vmt = path.read_text()
         assert '\n\n' not in vmt and vmt.endswith('}\n')
         assert 'VertexLitGeneric' in vmt and '$surfaceprop' not in vmt
         assert f'models/garryscape/{namespace}/regions/{region}"' in vmt
+        assert f'"$atlasdimensions" "[{width} {height} 0 0]"' in vmt
     folder = root / 'preview'
     doc = json.loads((folder / f'{region}.gltf').read_text())
     assert doc['asset']['version'] == '2.0'
@@ -102,6 +104,7 @@ def validate(root):
     if region == '50_50':
         assert count == 11475 and manifest['trianglesPerFloor'] == [8847, 1100, 724, 62]
         assert manifest['underwaterTriangles'] == 742
+        assert (width, height) == (1024, 512)
         assert manifest['padding'] == 0 and manifest['resizedImages'] == 0
         assert any(m['alphaMode'] == 'BLEND' for m in doc['materials']), 'missing water transparency'
     def array(index, components):

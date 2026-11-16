@@ -66,6 +66,7 @@ const float4 Rect : register(c40);
 const float4 Info : register(c41);
 const float4 Tint : register(c42);
 const float4 Filtering : register(c43);
+const float4 AtlasDimensions : register(c44);
 struct PS_INPUT {
     float3 screen : VPOS;
     float2 uv : TEXCOORD0;
@@ -78,15 +79,15 @@ float4 SampleLevel(float2 uv,float level) {
     float divisor=exp2(level);
     float2 dimensions=Info.yz/divisor;
     float2 origin=Rect.xy/divisor;
-    float side=Info.x/divisor;
+    float2 atlasSize=max(AtlasDimensions.xy/divisor,float2(1,1));
     float2 p=frac(uv)*dimensions-0.5;
     float2 i=floor(p),w=frac(p);
     float2 a=i-floor(i/dimensions)*dimensions;
     float2 b=(i+1)-floor((i+1)/dimensions)*dimensions;
-    float4 aa=tex2Dlod(Atlas,float4((origin+a+0.5)/side,0,level));
-    float4 ba=tex2Dlod(Atlas,float4((origin+float2(b.x,a.y)+0.5)/side,0,level));
-    float4 ab=tex2Dlod(Atlas,float4((origin+float2(a.x,b.y)+0.5)/side,0,level));
-    float4 bb=tex2Dlod(Atlas,float4((origin+b+0.5)/side,0,level));
+    float4 aa=tex2Dlod(Atlas,float4((origin+a+0.5)/atlasSize,0,level));
+    float4 ba=tex2Dlod(Atlas,float4((origin+float2(b.x,a.y)+0.5)/atlasSize,0,level));
+    float4 ab=tex2Dlod(Atlas,float4((origin+float2(a.x,b.y)+0.5)/atlasSize,0,level));
+    float4 bb=tex2Dlod(Atlas,float4((origin+b+0.5)/atlasSize,0,level));
     return lerp(lerp(aa,ba,w.x),lerp(ab,bb,w.x),w.y);
 }
 float4 SampleNative(float2 uv) {
@@ -154,6 +155,7 @@ for _, water in ipairs({false,true}) do
     shader:EnableFlashlightSupport(true)
     shader:SetPixelShaderConstantFP(40,shader:AddParam("$atlasrect",SHADER_PARAM_TYPE_VEC4,"[0 0 128 128]"))
     shader:SetPixelShaderConstantFP(41,shader:AddParam("$atlasinfo",SHADER_PARAM_TYPE_VEC4,"[128 128 128 7]"))
+    shader:SetPixelShaderConstantFP(44,shader:AddParam("$atlasdimensions",SHADER_PARAM_TYPE_VEC4,"[128 128 0 0]"))
     shader:SetPixelShaderConstantFP(42,shader:AddParam("$tint",SHADER_PARAM_TYPE_VEC4,"[1 1 1 1]"))
     for _, pair in ipairs({
         {PSREG_LIGHT_INFO_ARRAY,STDCONST_LIGHT_INFO},
