@@ -290,6 +290,44 @@ pub const FACES: [&[usize]; 13] = [
         1, 0, 5, 4, 1, 0, 1, 5, 0, 0, 4, 3, 0, 4, 5, 3, 0, 5, 2, 3, 0, 1, 2, 5,
     ],
 ];
+/// RT4 SceneGraph.OVERLAY_TRIANGLE_FLAGS selects the surface heightmap at
+/// these unrotated vertices of an underwater underlay polygon. The remaining
+/// vertices use the riverbed. Despite its name, the Java table is per vertex.
+const SHORE_VERTICES: [&[[u8; 2]]; 12] = [
+    &[],
+    &[[128, 0], [0, 128]],
+    &[[0, 0], [64, 128]],
+    &[[128, 0], [64, 128]],
+    &[[0, 0], [64, 128]],
+    &[[64, 128], [128, 0]],
+    &[[64, 0], [64, 128]],
+    &[[0, 64], [64, 0]],
+    &[[64, 0], [0, 64]],
+    &[[0, 0], [128, 128], [64, 96], [32, 64]],
+    &[[0, 0], [32, 64], [64, 96], [128, 128]],
+    &[[0, 0], [32, 32], [96, 32], [128, 0]],
+];
+pub fn shoreline_vertex(shape: u8, rotation: u8, xy: [f32; 2]) -> bool {
+    SHORE_VERTICES[shape as usize].iter().any(|&[x, y]| {
+        let (x, y) = match rotation & 3 {
+            1 => (y, 128 - x),
+            2 => (128 - x, 128 - y),
+            3 => (128 - y, x),
+            _ => (x, y),
+        };
+        xy == [x as f32 / 128., y as f32 / 128.]
+    })
+}
+/// Match RT4 SceneGraph.interpolateHeight, including the two integer shifts.
+/// Interpolate in the original downward-positive coordinate system before
+/// converting to Source Z, so negative rounding matches Java.
+pub fn hd_height(heights: [i32; 4], xy: [f32; 2]) -> f32 {
+    let x = (xy[0] * 128.) as i32;
+    let y = (xy[1] * 128.) as i32;
+    let south = (heights[0] * (128 - x) + heights[1] * x) >> 7;
+    let north = (heights[3] * (128 - x) + heights[2] * x) >> 7;
+    -((south * (128 - y) + north * y) >> 7) as f32
+}
 /// Position and height interpolation weights for the original shaped-tile vertices.
 pub fn vertex(mut code: u8, rotation: u8) -> ([f32; 2], [f32; 4]) {
     if code <= 8 && code & 1 == 0 {
@@ -317,16 +355,8 @@ pub fn vertex(mut code: u8, rotation: u8) -> ([f32; 2], [f32; 4]) {
         [0.75, 0.75],
         [0.25, 0.75],
     ][code as usize - 1];
-    let w = match code {
-        1 | 13 => [1., 0., 0., 0.],
-        3 | 14 => [0., 1., 0., 0.],
-        5 | 15 => [0., 0., 1., 0.],
-        7 | 16 => [0., 0., 0., 1.],
-        2 | 9 => [0.5, 0.5, 0., 0.],
-        4 | 10 => [0., 0.5, 0.5, 0.],
-        6 | 11 => [0., 0., 0.5, 0.5],
-        _ => [0.5, 0., 0., 0.5],
-    };
+    let [x, y] = xy;
+    let w = [(1. - x) * (1. - y), x * (1. - y), x * y, (1. - x) * y];
     (xy, w)
 }
 #[cfg(test)]
@@ -346,6 +376,37 @@ mod tests {
         assert_eq!(result.tiles.len(), 4096);
         assert_eq!(result.tile(0, 0, 0).height, -120);
         assert_eq!(surface[0].height, -128);
+    }
+    #[test]
+    fn hd_inset_height_uses_both_rows_and_java_rounding() {
+        assert_eq!(hd_height([-8, -16, -40, -24], [0.25, 0.25]), 15.);
+        assert_eq!(hd_height([-8, -16, -40, -24], [0., 0.]), 8.);
+        assert_eq!(hd_height([-8, -16, -40, -24], [1., 1.]), 40.);
+        // Java rounds negative intermediate results down rather than to zero.
+        assert_eq!(hd_height([-1, 0, 0, 0], [0.5, 0.5]), 1.);
+    }
+    #[test]
+    fn underwater_shoreline_flags_rotate_with_the_polygon() {
+        // RT4 shape 6 has the two midpoint shoreline vertices. Both must use
+        // surface heights while the outside corners remain on the riverbed.
+        for rotation in 0..4 {
+            let vertical = rotation % 2 == 0;
+            for xy in [[0.5, 0.], [0.5, 1.], [0., 0.5], [1., 0.5]] {
+                assert_eq!(
+                    shoreline_vertex(6, rotation, xy),
+                    (xy[0] == 0.5) == vertical
+                );
+            }
+            for xy in [[0., 0.], [1., 0.], [1., 1.], [0., 1.]] {
+                assert!(!shoreline_vertex(6, rotation, xy));
+            }
+            assert!(!shoreline_vertex(0, rotation, [0., 0.]));
+        }
+        // Inset shoreline vertices in the final three shapes also use the
+        // surface heightmap; these are not all on the outside tile edges.
+        assert!(shoreline_vertex(9, 0, [0.25, 0.5]));
+        assert!(shoreline_vertex(10, 0, [0.5, 0.75]));
+        assert!(shoreline_vertex(11, 0, [0.75, 0.25]));
     }
     #[test]
     fn truncation_rejected() {

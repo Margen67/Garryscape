@@ -110,6 +110,14 @@ def validate(root):
         offset = view.get('byteOffset', 0) + acc.get('byteOffset', 0)
         return [struct.unpack_from('<' + 'f'*components, buffer, offset+i*components*4) for i in range(acc['count'])]
     vertices = array(0, 3)
+    if region == '50_50':
+        # Known cache shoreline vertices: the old exporter lowered the bed
+        # endpoint 5.44–6.8 Source units below the adjoining bank here.
+        unit = json.loads((root / 'complete.json').read_text())['scale'] * 0.5 * 128 * 0.0254
+        for x, y in [(33.5, 58), (33.5, 59), (34.5, 49), (34.5, 50), (34.5, 56.75)]:
+            px, pz = (x - 32) * unit, -(y - 32) * unit
+            heights = [v[1] for v in vertices if abs(v[0]-px) < 1e-5 and abs(v[2]-pz) < 1e-5]
+            assert heights and all(abs(h) < 1e-5 for h in heights), f'shoreline gap at {x}/{y}: {heights}'
     normals = array(1, 3)
     assert all(all(math.isfinite(v) for v in a) for a in vertices + normals)
     assert all(abs(sum(v*v for v in n) - 1) < 1e-5 for n in normals)

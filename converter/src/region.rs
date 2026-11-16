@@ -240,7 +240,8 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh>
                     .map(|&c| terrain::vertex(c, tile.rotation))
                     .collect::<Vec<_>>();
                 let corners = [(x, y), (x + 1, y), (x + 1, y + 1), (x, y + 1)];
-                let heights = corners.map(|(x, y)| -(world.layer_tile(uw, p, x, y).height as f32));
+                let heights = corners.map(|(x, y)| world.layer_tile(uw, p, x, y).height);
+                let surface_heights = corners.map(|(x, y)| world.tile(0, x, y).height);
                 let normals = corners.map(|(x, y)| world.layer_normal(uw, p, x, y));
                 for f in terrain::FACES[shape].as_chunks::<4>().0 {
                     let overlay = f[0] == 1;
@@ -291,7 +292,16 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh>
                         } else {
                             index
                         }];
-                        let z = (0..4).map(|j| heights[j] * w[j]).sum::<f32>();
+                        let vertex_heights = if uw
+                            && !overlay
+                            && tile.over != 0
+                            && terrain::shoreline_vertex(tile.shape, tile.rotation, xy)
+                        {
+                            surface_heights
+                        } else {
+                            heights
+                        };
+                        let z = terrain::hd_height(vertex_heights, xy);
                         let unit = 0.5 * scale;
                         let pos = [
                             (x as f32 + xy[0] - 32.) * 128. * unit,

@@ -65,10 +65,12 @@ class Script(unittest.TestCase):
         return subprocess.run(args,env=env,cwd=self.path,text=True,capture_output=True)
     def test_success_reuse_and_no_source_install(self):
         r=self.run_script();self.assertEqual(r.returncode,0,r.stderr+r.stdout)
-        model=self.addon/'models/garryscape/2009scape/regions/50_50.mdl';stamp=model.stat().st_mtime_ns
+        model=self.addon/'models/garryscape/2009scape/regions/50_50.mdl'
+        stale=self.addon/'old file.txt';stale.write_text('stale')
         r=self.run_script();self.assertEqual(r.returncode,0,r.stderr+r.stdout)
         self.assertEqual(self.counter.read_text().count('compile'),1)
-        self.assertEqual(model.stat().st_mtime_ns,stamp)
+        self.assertTrue(model.is_file())
+        self.assertFalse(stale.exists())
         self.assertFalse(any(p.suffix in {'.qc','.dmx','.glb','.gltf','.bin','.png'} for p in self.addon.rglob('*')))
         self.assertTrue((self.addon/'lua/autorun/server/garryscape_preview.lua').is_file())
         self.assertTrue((self.addon/'lua/autorun/client/garryscape_shader.lua').is_file())
@@ -104,6 +106,27 @@ print(path)
                 r=self.run_script(fail=mode);self.assertNotEqual(r.returncode,0,r.stdout)
                 self.assertFalse(self.addon.exists())
                 self.assertTrue((self.path/'relative output/build/2009scape/regions/50_50/source/garryscape/2009scape/regions/50_50/compile.log').exists())
+    def test_failure_preserves_previous_installation(self):
+        self.assertEqual(self.run_script().returncode,0)
+        marker=self.addon/'keep.txt';marker.write_text('previous installation')
+        for mode in ['exit','message','nothing']:
+            r=self.run_script('--rebuild',fail=mode)
+            self.assertNotEqual(r.returncode,0)
+            self.assertEqual(marker.read_text(),'previous installation')
+    def test_staging_failure_preserves_previous_installation(self):
+        self.assertEqual(self.run_script().returncode,0)
+        marker=self.addon/'keep.txt';marker.write_text('previous installation')
+        (self.repo/'LICENSE').unlink()
+        r=self.run_script()
+        self.assertNotEqual(r.returncode,0)
+        self.assertEqual(marker.read_text(),'previous installation')
+        self.assertFalse(list(self.addon.parent.glob('.garryscape-install.*')))
+    def test_source_destination_is_rejected(self):
+        self.addon=self.repo
+        r=self.run_script()
+        self.assertNotEqual(r.returncode,0)
+        self.assertIn('would delete source',r.stderr)
+        self.assertTrue((self.repo/'convert.sh').is_file())
     def test_preview_does_not_compile_or_install(self):
         r=self.run_script('--preview-only');self.assertEqual(r.returncode,0,r.stderr)
         self.assertFalse(self.counter.exists());self.assertFalse(self.addon.exists())

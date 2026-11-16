@@ -89,19 +89,36 @@ if (( ${#REBUILD[@]} )) || [[ $TOOL_HASH != "$SAVED_TOOL_HASH" ]] || [[ ! -f $BU
 else
     echo 'Using compiled Source model.'
 fi
-copy_changed() { local src=$1 dst=$2; mkdir -p -- "$(dirname -- "$dst")"; if [[ ! -f $dst ]] || ! cmp -s "$src" "$dst"; then cp -- "$src" "$dst"; fi; }
+# Prepare the entire replacement before removing the installed addon. Compiler
+# or staging failures leave the previous installation intact.
+[[ -n $ADDON ]] || fail 'Addon destination must not be empty.'
+case "$(basename -- "$ADDON")" in /|.|..) fail 'Unsafe addon destination.' ;; esac
+[[ ! -L $ADDON ]] || fail 'Addon destination must not be a symbolic link.'
+mkdir -p -- "$(dirname -- "$ADDON")"
+ADDON="$(cd -- "$(dirname -- "$ADDON")" && pwd)/$(basename -- "$ADDON")"
+case "$ADDON" in /|*/.|*/..) fail 'Unsafe addon destination.' ;; esac
+for protected in "$ROOT" "$OUTPUT" "$(cd -- "$CACHE" && pwd)"; do
+    case "$protected/" in "$ADDON/"*) fail "Addon destination would delete source, build or cache files: $ADDON" ;; esac
+done
+STAGED=$(mktemp -d "$(dirname -- "$ADDON")/.garryscape-install.XXXXXX")
+trap 'rm -rf -- "$STAGED"' EXIT
+copy_asset() { local src=$1 dst=$2; mkdir -p -- "$(dirname -- "$dst")"; cp -- "$src" "$dst"; }
 for suffix in mdl vvd dx90.vtx dx80.vtx sw.vtx; do
     asset="$MODEL.$suffix"
-    [[ ! -f $asset ]] || copy_changed "$asset" "$ADDON/models/garryscape/$NAME/regions/$(basename -- "$asset")"
+    [[ ! -f $asset ]] || copy_asset "$asset" "$STAGED/models/garryscape/$NAME/regions/$(basename -- "$asset")"
 done
 for asset in "$GAME/materials/models/garryscape/$NAME/regions/${RX}_${RY}.vtf" "$GAME/materials/models/garryscape/$NAME/regions/${RX}_${RY}_"*.vmt; do
-    copy_changed "$asset" "$ADDON/materials/models/garryscape/$NAME/regions/$(basename -- "$asset")"
+    copy_asset "$asset" "$STAGED/materials/models/garryscape/$NAME/regions/$(basename -- "$asset")"
 done
-copy_changed "$ROOT/LICENSE" "$ADDON/LICENSE"
-copy_changed "$ROOT/addons/garryscape/lua/autorun/server/garryscape_preview.lua" "$ADDON/lua/autorun/server/garryscape_preview.lua"
-copy_changed "$ROOT/addons/garryscape/lua/autorun/client/garryscape_shader.lua" "$ADDON/lua/autorun/client/garryscape_shader.lua"
-copy_changed "$ROOT/addons/garryscape/lua/garryscape/atlas_shader.lua" "$ADDON/lua/garryscape/atlas_shader.lua"
-copy_changed "$BUILD/manifest.json" "$ADDON/data/garryscape/terrain_preview.json"
+copy_asset "$ROOT/LICENSE" "$STAGED/LICENSE"
+copy_asset "$ROOT/addons/garryscape/lua/autorun/server/garryscape_preview.lua" "$STAGED/lua/autorun/server/garryscape_preview.lua"
+copy_asset "$ROOT/addons/garryscape/lua/autorun/client/garryscape_shader.lua" "$STAGED/lua/autorun/client/garryscape_shader.lua"
+copy_asset "$ROOT/addons/garryscape/lua/garryscape/atlas_shader.lua" "$STAGED/lua/garryscape/atlas_shader.lua"
+copy_asset "$BUILD/manifest.json" "$STAGED/data/garryscape/terrain_preview.json"
+# Deliberately replace the whole addon, including stale files from older builds.
+rm -rf -- "$ADDON"
+mv -- "$STAGED" "$ADDON"
+trap - EXIT
 echo "Installed compiled region and preview Lua in $ADDON"
 echo 'Sources, glTF and compile.log remain in the output directory.'
 echo 'The atlas materials require EGSM on the game client. See README.md.'

@@ -97,7 +97,9 @@ The format is Source's `model 1` / `keyvalues2 1` DMX.
 
 The converter retains the cache's shaped terrain triangles and the original
 texture-repeat scale. It loads both the four-floor surface map (`m50_50`) and
-its separate underwater terrain (`um50_50`). It does not simplify faces, add
+its separate underwater terrain (`um50_50`). Underwater shoreline vertices follow
+RT4's per-vertex surface-height flags, so banks join the riverbed without a gap.
+Shaped vertices use RT4's HD bilinear height interpolation and integer rounding. It does not simplify faces, add
 replacement geometry, split triangles for UV seams, or rasterize terrain shapes
 and transitions into per-tile images. The coordinate conversion changes axes,
 uses a region-local origin, and applies `--scale`.
@@ -172,6 +174,11 @@ The fingerprint includes converter executable contents, cache-file timestamps
 and sizes, region, namespace, and scale. Use `--rebuild` after manually replacing
 cache data while preserving its timestamps, or to regenerate deliberately.
 Failed StudioMDL inputs and logs are retained, and a failed build is not installed.
+After a successful build (including reuse of a verified compiled model), the
+script stages the addon, deletes the entire destination `garryscape` addon folder,
+and replaces it with this build. Stale files and previously installed regions
+are removed. Compilation or staging failures preserve the previous installation;
+`--preview-only` never replaces it.
 
 ## Map preview
 
