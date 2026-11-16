@@ -86,9 +86,9 @@ struct PS_INPUT {
     float4 projPos : TEXCOORD4;
     float3 terrain : TEXCOORD5;
 };
-float4 SampleLevel(float2 uv,float level,float4 rect,float4 info) {
+float4 SampleLevel(float2 uv,float level,float4 rect) {
     float divisor=exp2(level);
-    float2 dimensions=info.yz/divisor;
+    float2 dimensions=rect.zw/divisor;
     float2 origin=rect.xy/divisor;
     float2 atlasSize=max(AtlasDimensions.xy/divisor,float2(1,1));
     if (Filtering.y<0.5) {
@@ -99,15 +99,16 @@ float4 SampleLevel(float2 uv,float level,float4 rect,float4 info) {
     float2 i=floor(p),w=frac(p);
     float2 a=i-floor(i/dimensions)*dimensions;
     float2 b=(i+1)-floor((i+1)/dimensions)*dimensions;
-    float4 aa=tex2Dlod(Atlas,float4((origin+a+0.5)/atlasSize,0,level));
-    float4 ba=tex2Dlod(Atlas,float4((origin+float2(b.x,a.y)+0.5)/atlasSize,0,level));
-    float4 ab=tex2Dlod(Atlas,float4((origin+float2(a.x,b.y)+0.5)/atlasSize,0,level));
-    float4 bb=tex2Dlod(Atlas,float4((origin+b+0.5)/atlasSize,0,level));
-    return lerp(lerp(aa,ba,w.x),lerp(ab,bb,w.x),w.y);
+    // Accumulate taps immediately instead of keeping four float4 samples live.
+    float4 result=tex2Dlod(Atlas,float4((origin+a+0.5)/atlasSize,0,level))*(1-w.x)*(1-w.y);
+    result+=tex2Dlod(Atlas,float4((origin+float2(b.x,a.y)+0.5)/atlasSize,0,level))*w.x*(1-w.y);
+    result+=tex2Dlod(Atlas,float4((origin+float2(a.x,b.y)+0.5)/atlasSize,0,level))*(1-w.x)*w.y;
+    result+=tex2Dlod(Atlas,float4((origin+b+0.5)/atlasSize,0,level))*w.x*w.y;
+    return result;
 }
-float4 SampleNative(float2 uv,float4 rect,float4 info,float2 du,float2 dv) {
-    if (info.y==0) return float4(1,1,1,1);
-    float2 dx=du*info.yz,dy=dv*info.yz;
+float4 SampleNative(float2 uv,float4 rect,float2 du,float2 dv) {
+    if (rect.z==0) return float4(1,1,1,1);
+    float2 dx=du*rect.zw,dy=dv*rect.zw;
     // Principal axes of the pixel footprint in native texture texels.
     float xx=dx.x*dx.x+dy.x*dy.x;
     float yy=dx.y*dx.y+dy.y*dy.y;
@@ -123,14 +124,19 @@ float4 SampleNative(float2 uv,float4 rect,float4 info,float2 du,float2 dv) {
     float width=max(max(sqrt(minor2),major/limit),1.0);
     int taps=(int)clamp(ceil(major/width),1,limit);
     // Retain the original isotropic footprint when anisotropy is disabled.
-    float level=Filtering.z>0.5 ? clamp(log2(width),0,info.w) : 0;
+    float level=Filtering.z>0.5 ? clamp(log2(width),0,log2(rect.z)) : 0;
     if (Filtering.y<0.5) level=floor(level+0.5);
-    float lo=floor(level),hi=min(lo+1,info.w);
-    float4 result=float4(0,0,0,0);
-    [loop] for (int tap=0;tap<taps;tap++) {
-        float offset=((tap+0.5)/taps-0.5)*major;
-        float2 sampleUV=uv+axis*offset/info.yz;
-        result+=lerp(SampleLevel(sampleUV,lo,rect,info),SampleLevel(sampleUV,hi,rect,info),frac(level));
+    float lo=floor(level),blend=frac(level);
+    // One sample loop for both mip levels keeps the SM3 register footprint low
+    // and avoids sampling a second mip when its contribution would be zero.
+    int mips=blend>0 ? 2 : 1;
+    float2 stride=axis*major/(rect.zw*taps);
+    float2 first=uv+stride*(0.5-0.5*taps);
+    float4 result=0;
+    [loop] for (int sampleIndex=0;sampleIndex<taps*mips;sampleIndex++) {
+        int tap=sampleIndex/mips;
+        int high=sampleIndex-tap*mips;
+        result+=SampleLevel(first+stride*tap,lo+high,rect)*(high>0 ? blend : 1-blend);
     }
     return result/taps;
 }
@@ -154,47 +160,52 @@ float Mask(float2 p,float4 a,float4 b,float4 c) {
     if (min(min(u,v),1-u-v)<-0.00001) return 0;
     return saturate((a.z*(1-u-v)+b.z*u+c.z*v)/255);
 }
-float4 GroundBlend(float4 base,float3 terrain,float2 dx,float2 dy,float address) {
-    if (BlendingEnabled.x<0.5 || Water.x>0.5 || Control.z<2) return base;
-    float2 tile=clamp(floor(terrain.xy/128),0,63);
+// Feed the base material and blended layers through one sampler call site.
+// Keeping a separate base sampler live across the blend loop exhausts SM3 temps.
+float4 TerrainColor(float3 terrain,float address,float2 dx,float2 dy) {
+    float4 result=0;
+    float2 p=terrain.xy-clamp(floor(terrain.xy/128),0,63)*128;
+    int count=0;
     address=floor(address+0.5);
-    if (address<1) return base;
-    float2 p=terrain.xy-tile*128;
-    int count=(int)ReadControl(address).x;
-    address+=1;
-    [loop] for (int li=0;li<count;li++) {
-        float4 header=ReadControl(address);
-        float descriptor=Address(header.xyz);
-        int triangles=(int)header.w;
+    if (BlendingEnabled.x>0.5 && Water.x<0.5 && Control.z>=2 && address>=1) {
+        count=(int)ReadControl(address).x;
         address+=1;
-        float opacity=0;
-        [loop] for (int ti=0;ti<triangles;ti++) {
-            float4 a=ReadControl(address),b=ReadControl(address+1),c=ReadControl(address+2);
-            address+=3;
-            opacity=max(opacity,Mask(p,a,b,c));
+    }
+    [loop] for (int layer=-1;layer<count;layer++) {
+        float4 rect=Rect;
+        float scale=TextureScale.x;
+        float descriptor=-1;
+        float opacity=1;
+        if (layer>=0) {
+            float4 header=ReadControl(address);
+            descriptor=Address(header.xyz);
+            int triangles=(int)header.w;
+            address+=1;
+            opacity=0;
+            [loop] for (int ti=0;ti<triangles;ti++) {
+                opacity=max(opacity,Mask(p,ReadControl(address),ReadControl(address+1),ReadControl(address+2)));
+                address+=3;
+            }
+            if (opacity>0) {
+                rect=float4(Pair(ReadControl(descriptor)),Pair(ReadControl(descriptor+1)));
+                scale=Pair(ReadControl(descriptor+4)).x;
+            }
         }
         if (opacity>0) {
-            float2 origin=Pair(ReadControl(descriptor));
-            float2 size=Pair(ReadControl(descriptor+1));
-            float4 tint=float4(Pair(ReadControl(descriptor+2)),Pair(ReadControl(descriptor+3)))/8192;
-            float scale=Pair(ReadControl(descriptor+4)).x;
-            float4 rect=float4(origin,size);
-            float4 info=float4(AtlasDimensions.x,size,log2(max(size.x,1)));
             float2 uv=terrain.xy/scale+frac(Mapping.zw/scale);
-            float4 color=SampleNative(uv,rect,info,dx/scale,dy/scale)*tint;
-            base=lerp(base,color,opacity);
+            float4 color=SampleNative(uv,rect,dx/scale,dy/scale);
+            if (descriptor<0) color*=Tint;
+            else color*=float4(Pair(ReadControl(descriptor+2)),Pair(ReadControl(descriptor+3)))/8192;
+            result=lerp(result,color,opacity);
         }
     }
-    return base;
+    return result;
 }
 float4 main(PS_INPUT i) : COLOR {
     // Derivatives are evaluated before divergent mask loops; explicit LOD
     // sampling inside those loops remains valid on Shader Model 3 hardware.
     float2 dx=ddx(i.terrain.xy),dy=ddy(i.terrain.xy);
-    float scale=TextureScale.x;
-    float2 uv=i.terrain.xy/scale+frac(Mapping.zw/scale);
-    float4 base=SampleNative(uv,Rect,Info,dx/scale,dy/scale)*Tint;
-    base=GroundBlend(base,i.terrain,dx,dy,i.uv.x);
+    float4 base=TerrainColor(i.terrain,i.uv.x,dx,dy);
     float3 lighting=float3(0,0,0);
     float3 normal=normalize(i.normal);
 #if FLASHLIGHT || X64

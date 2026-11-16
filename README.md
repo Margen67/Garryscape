@@ -159,7 +159,7 @@ the same atlas; it does not rasterize terrain or resize the native images.
 The shader evaluates those controls only on blended triangles. Blender's loader
 uses shared analytic mask nodes for the same transitions.
 
-Toggle blending at **Utilities → Garryscape → Terrain → Ground blending**, or
+Toggle blending at **Utilities → Garryscape → Settings → Ground blending**, or
 with `garryscape_ground_blending 0/1`. It defaults to enabled, is saved on the
 client, and changes immediately without rebuilding. Source's single model UV
 channel carries the precomputed blend address and terrain layer; the shader
@@ -227,6 +227,7 @@ bash -n convert.sh
 python tests/validate_region.py output/2009scape/regions/50_50
 python tests/test_script.py
 python tests/test_preview.py  # optional liblua 5.3/5.4 for the lifecycle harness
+python tests/test_hlsl.py     # optional native Microsoft HLSL compiler harness
 ```
 
 For visual inspection, use the Blender loader above; Blender is not required to
@@ -235,6 +236,16 @@ Windows StudioMDL and in-game rendering must be checked on Windows. Automated
 script tests use a fake compiler to verify orchestration, not to claim a real
 MDL compilation. The Lua harness checks map isolation, terrain spawning and
 cleanup, missing-model diagnostics, and deferred player placement with noclip.
+
+The Lua harness checks API wiring, not HLSL register allocation. To run the
+native compiler regression test, build `tests/hlsl_compile.cpp` using the Windows
+SDK (or Winelib), and set `GARRYSCAPE_HLSL_COMPILER` to that executable and
+`GARRYSCAPE_EGSM_INCLUDES` to EGSM's `include_files` directory. The helper loads
+Microsoft's `d3dcompiler_47.dll`; `GARRYSCAPE_D3DCOMPILER_DLL` can specify another
+location. It compiles all ten vertex and ten pixel variants using EGSM's default
+flags and reports temporary-register usage. Compiler DLLs, upstream headers,
+and compiled test output are not included in this repository. These tests verify
+compilation; actual GPU rendering still requires an in-game check.
 
 ## References
 
