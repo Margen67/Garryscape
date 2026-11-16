@@ -12,6 +12,17 @@ MATERIAL_VAR2_LIGHTING_VERTEX_LIT=2
 game={GetMap=function() return "garryscape" end}
 EGSM={Version=2}
 local compiled,shaders,errors={},{},{}
+local callbacks={}
+local anisotropy=8
+function GetConVar(name)
+    assert(name=="mat_forceaniso")
+    return {GetFloat=function() return anisotropy end}
+end
+math.Clamp=function(n,lo,hi) return math.max(lo,math.min(n,hi)) end
+cvars={AddChangeCallback=function(name,callback,id)
+    assert(name=="mat_forceaniso" and id=="GarryscapeAtlasFiltering")
+    callbacks[name]=callback
+end}
 function ErrorNoHalt(message) errors[#errors+1]=message end
 function include(path) return dofile("addons/garryscape/lua/"..path) end
 shaderlib={
@@ -36,6 +47,10 @@ shaderlib={
             self.parameters[#self.parameters+1]=param
             return #self.parameters
         end
+        function shader:SetPixelShaderConstant(index,x,y,z,w)
+            assert(index==43 and y==0 and z==0 and w==0)
+            self.filter=x
+        end
         function shader:SetPixelShaderConstantFP(index,param) self.constants[index]=self.parameters[param] end
         function shader:SetPixelShaderStandardConstant(index,constant) assert(index and constant) end
         function shader:SetFlags(value) self.flags=value end
@@ -53,6 +68,17 @@ for _,name in ipairs({"GarryscapeAtlas","GarryscapeAtlasWater"}) do
     assert(shader.constants[40]=="$atlasrect" and shader.constants[41]=="$atlasinfo" and shader.constants[42]=="$tint")
 end
 assert(shaders.GarryscapeAtlas.flags==0 and shaders.GarryscapeAtlasWater.flags==MATERIAL_VAR_TRANSLUCENT)
+for _,shader in pairs(shaders) do assert(shader.filter==8) end
+for _,setting in ipairs({0,1,2,4,8,16,32}) do
+    callbacks.mat_forceaniso("mat_forceaniso","8",tostring(setting))
+    for _,shader in pairs(shaders) do
+        assert(shader.filter==math.Clamp(setting,1,16))
+    end
+end
+-- Reinitialization replaces the named callback and reads the current setting.
+anisotropy=4
+include("garryscape/atlas_shader.lua")
+for _,shader in pairs(shaders) do assert(shader.filter==4) end
 EGSM=nil
 shaderlib=nil
 dofile("addons/garryscape/lua/autorun/client/garryscape_shader.lua")

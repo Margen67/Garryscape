@@ -65,6 +65,7 @@ const float4 g_ShaderControls : register(PSREG_SHADER_CONTROLS);
 const float4 Rect : register(c40);
 const float4 Info : register(c41);
 const float4 Tint : register(c42);
+const float4 Filtering : register(c43);
 struct PS_INPUT {
     float3 screen : VPOS;
     float2 uv : TEXCOORD0;
@@ -91,9 +92,30 @@ float4 SampleLevel(float2 uv,float level) {
 float4 SampleNative(float2 uv) {
     if (Info.y==0) return float4(1,1,1,1);
     float2 dx=ddx(uv)*Info.yz,dy=ddy(uv)*Info.yz;
-    float level=clamp(0.5*log2(max(max(dot(dx,dx),dot(dy,dy)),1.0)),0,Info.w);
+    // Principal axes of the pixel footprint in native texture texels.
+    float xx=dx.x*dx.x+dy.x*dy.x;
+    float yy=dx.y*dx.y+dy.y*dy.y;
+    float xy=dx.x*dx.y+dy.x*dy.y;
+    float spread=sqrt(max((xx-yy)*(xx-yy)+4*xy*xy,0));
+    float major2=max(0.5*(xx+yy+spread),0);
+    float minor2=max(0.5*(xx+yy-spread),0);
+    float major=sqrt(major2);
+    float2 axis=float2(xy,major2-xx);
+    if (dot(axis,axis)<0.000001) axis=xx>=yy ? float2(1,0) : float2(0,1);
+    else axis=normalize(axis);
+    float limit=clamp(Filtering.x,1,16);
+    float width=max(max(sqrt(minor2),major/limit),1.0);
+    int taps=(int)clamp(ceil(major/width),1,limit);
+    // Retain the original isotropic footprint when anisotropy is disabled.
+    float level=clamp(log2(width),0,Info.w);
     float lo=floor(level),hi=min(lo+1,Info.w);
-    return lerp(SampleLevel(uv,lo),SampleLevel(uv,hi),frac(level));
+    float4 result=float4(0,0,0,0);
+    [loop] for (int tap=0;tap<taps;tap++) {
+        float offset=((tap+0.5)/taps-0.5)*major;
+        float2 sampleUV=uv+axis*offset/Info.yz;
+        result+=lerp(SampleLevel(sampleUV,lo),SampleLevel(sampleUV,hi),frac(level));
+    }
+    return result/taps;
 }
 float4 main(PS_INPUT i) : COLOR {
     float4 base=SampleNative(i.uv)*Tint;
@@ -115,8 +137,17 @@ float4 main(PS_INPUT i) : COLOR {
         fog,g_fPixelFogType,TONEMAP_SCALE_LINEAR,g_fWriteDepthToAlpha,i.projPos.z);
 }
 ]==])
+local atlasShaders={}
+local function updateFiltering(_,_,value)
+    local convar=GetConVar("mat_forceaniso")
+    local amount=math.Clamp(tonumber(value) or (convar and convar:GetFloat()) or 1,1,16)
+    for _,shader in ipairs(atlasShaders) do
+        shader:SetPixelShaderConstant(43,amount,0,0,0)
+    end
+end
 for _, water in ipairs({false,true}) do
     local shader=shaderlib.NewShader(water and "GarryscapeAtlasWater" or "GarryscapeAtlas")
+    atlasShaders[#atlasShaders+1]=shader
     shader:SetVertexShader("GarryscapeAtlasVS")
     shader:SetPixelShader("GarryscapeAtlasPS")
     shader:BindTexture(0,PARAM_BASETEXTURE)
@@ -135,3 +166,7 @@ for _, water in ipairs({false,true}) do
     shader:SetFlags(water and MATERIAL_VAR_TRANSLUCENT or 0)
     shader:SetFlags2(MATERIAL_VAR2_SUPPORTS_HW_SKINNING+MATERIAL_VAR2_LIGHTING_VERTEX_LIT)
 end
+
+-- Update only when the setting changes, never from a rendering hook.
+updateFiltering()
+cvars.AddChangeCallback("mat_forceaniso",updateFiltering,"GarryscapeAtlasFiltering")

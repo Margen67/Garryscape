@@ -130,7 +130,11 @@ not download or distribute the external DLL or edit `menu.lua` automatically.
 The shaders register once on the client. Native Source entities handle drawing;
 there are no per-frame Lua model conversions or draw loops. The shader wraps
 UVs within each native image, including bilinear/trilinear filtering at image
-edges without neighboring atlas images bleeding in. Source ambient lighting,
+edges without neighboring atlas images bleeding in. Atlas-safe anisotropic
+sampling follows `mat_forceaniso` (up to 16x; 0/1 uses isotropic trilinear
+filtering). Changes update shader constants through a convar callback, without
+per-frame Lua polling or asset recompilation. Higher settings cost more GPU
+texture samples. Source ambient lighting,
 dynamic lights, and flashlight support use EGSM's standard Source constants.
 The image is unchanged and the source UVs retain their original repeat frequency.
 
