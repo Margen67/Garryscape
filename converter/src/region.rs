@@ -14,8 +14,22 @@ pub struct Floor {
     pub texture: i32,
     pub scale: f32,
     pub blend: bool,
+    pub priority: u8,
+    pub water_color: u32,
 }
 impl Floor {
+    pub fn tint(&self, texture: Option<&crate::textures::Texture>) -> [f32; 4] {
+        let mut tint = [1.; 4];
+        for (c, shift) in [(0, 16), (1, 8), (2, 0)] {
+            let base = (self.rgb >> shift & 255) as f32;
+            let brightness = texture.map_or(0., |t| t.brightness as f32);
+            let boost = texture.map_or(0., |t| t.boost as f32);
+            tint[c] = (base * (256. - brightness) + 255. * brightness) / 256. / 255.
+                * (256. + boost)
+                / 256.;
+        }
+        tint
+    }
     fn decode(data: &[u8], overlay: bool) -> Result<Self> {
         let mut r = Reader::new(data);
         let mut f = Self {
@@ -23,6 +37,8 @@ impl Floor {
             texture: -1,
             scale: 128.,
             blend: false,
+            priority: 8,
+            water_color: 1190717,
         };
         loop {
             let op = r.u8()?;
@@ -36,12 +52,14 @@ impl Floor {
                 (false, 3) | (true, 9) => f.scale = r.u16()? as f32,
                 (true, 2) => f.texture = r.u8()? as i32,
                 (false, 4) | (true, 5) | (true, 8) | (true, 10) => {}
-                (true, 7) | (true, 13) => {
+                (true, 7) => {
                     r.u24()?;
                 }
-                (true, 11) | (true, 14) => {
+                (true, 14) => {
                     r.u8()?;
                 }
+                (true, 11) => f.priority = r.u8()?,
+                (true, 13) => f.water_color = r.u24()?,
                 (true, 12) => f.blend = true,
                 _ => bail!(
                     "Unknown {} floor opcode {op}",
@@ -66,6 +84,8 @@ pub struct Triangle {
     pub water: bool,
     pub material: usize,
     pub underwater: bool,
+    pub layer: u8,
+    pub blend_address: u32,
 }
 #[derive(Clone, serde::Serialize)]
 pub struct Surface {
@@ -73,6 +93,7 @@ pub struct Surface {
     pub tint: [f32; 4],
     pub texture: i32,
     pub water: bool,
+    pub scale: f32,
 }
 #[derive(serde::Serialize)]
 pub struct AtlasImage {
@@ -92,6 +113,8 @@ pub struct RegionMesh {
     pub underwater_triangles: usize,
     pub materials: Vec<Surface>,
     pub atlas_images: Vec<AtlasImage>,
+    pub blending: crate::blending::Blending,
+    pub mapping: [f32; 4],
 }
 /// Deduplicate ONLY exact native images, retaining dimensions and every RGBA byte.
 type PackedAtlas = (
@@ -223,11 +246,37 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh>
             }
         }
     }
+    let mut blending = crate::blending::Blending::build(world, &under, &over);
+    for floor in blending.floors.values() {
+        if floor.texture >= 0 {
+            needed.insert(floor.texture);
+        }
+    }
     for &id in &needed {
         textures.load(cache, id)?;
     }
     textures.images.retain(|id, _| needed.contains(id));
-    let (pixels, [width, height], atlas_images, rects) = pack(&textures)?;
+    blending.tints = blending
+        .floors
+        .iter()
+        .map(|(&id, f)| (id, f.tint(textures.images.get(&f.texture))))
+        .collect();
+    let (control_side, placeholder) = blending.encode(&BTreeMap::new(), &textures)?;
+    textures.add_control(crate::blending::CONTROL_ID, control_side, placeholder);
+    let (mut pixels, [width, height], mut atlas_images, rects) = pack(&textures)?;
+    blending.rect = rects[&crate::blending::CONTROL_ID];
+    let (side, controls) = blending.encode(&rects, &textures)?;
+    ensure!(
+        side == control_side,
+        "Blend control size changed after packing"
+    );
+    for y in 0..side {
+        for x in 0..side {
+            let dst = ((blending.rect[1] + y) * width + blending.rect[0] + x) * 4;
+            pixels[dst..dst + 4].copy_from_slice(&controls[y * side + x]);
+        }
+    }
+    atlas_images.retain(|i| !i.source_ids.contains(&crate::blending::CONTROL_ID));
     let mut materials: Vec<Surface> = vec![];
     let mut triangles = vec![];
     let mut tiles = 0;
@@ -279,23 +328,19 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh>
                     }
                     let texture = textures.images.get(&floor.texture);
                     let water = texture.is_some_and(|t| t.effect == 4) && !uw;
-                    let mut tint = [1.; 4];
-                    for (c, shift) in [(0, 16), (1, 8), (2, 0)] {
-                        let base = (floor.rgb >> shift & 255) as f32;
-                        let brightness = texture.map_or(0., |t| t.brightness as f32);
-                        let boost = texture.map_or(0., |t| t.boost as f32);
-                        tint[c] = (base * (256. - brightness) + 255. * brightness) / 256. / 255.
-                            * (256. + boost)
-                            / 256.;
-                    }
+                    let tint = floor.tint(texture);
                     let surface = Surface {
                         rect: rects.get(&floor.texture).copied().unwrap_or([0; 4]),
                         tint,
                         texture: floor.texture,
                         water,
+                        scale: floor.scale,
                     };
                     let material = if let Some(i) = materials.iter().position(|m| {
-                        m.rect == surface.rect && m.tint == surface.tint && m.water == water
+                        m.rect == surface.rect
+                            && m.tint == surface.tint
+                            && m.water == water
+                            && m.scale == surface.scale
                     }) {
                         i
                     } else {
@@ -358,6 +403,11 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh>
                         water,
                         material,
                         underwater: uw,
+                        layer: layer as u8,
+                        blend_address: {
+                            let a = controls[(layer * 64 + x as usize) * 64 + y as usize];
+                            a[0] as u32 + (a[1] as u32) * 256 + (a[2] as u32) * 65536
+                        },
                     });
                     if uw {
                         underwater_triangles += 1;
@@ -382,6 +432,13 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh>
         underwater_triangles,
         materials,
         atlas_images,
+        blending,
+        mapping: [
+            2. / scale,
+            4096.,
+            world.x as f32 * 8192.,
+            world.y as f32 * 8192.,
+        ],
     })
 }
 #[cfg(test)]

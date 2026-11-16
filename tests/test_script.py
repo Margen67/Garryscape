@@ -46,6 +46,7 @@ class Script(unittest.TestCase):
         shutil.copy(REPO/'addons/garryscape/lua/autorun/server/garryscape_preview.lua',self.repo/'addons/garryscape/lua/autorun/server')
         (self.repo/'addons/garryscape/lua/autorun/client').mkdir(parents=True)
         (self.repo/'addons/garryscape/lua/garryscape').mkdir(parents=True)
+        shutil.copy(REPO/'addons/garryscape/lua/autorun/client/garryscape_utilities.lua',self.repo/'addons/garryscape/lua/autorun/client')
         shutil.copy(REPO/'addons/garryscape/lua/autorun/client/garryscape_shader.lua',self.repo/'addons/garryscape/lua/autorun/client')
         shutil.copy(REPO/'addons/garryscape/lua/garryscape/atlas_shader.lua',self.repo/'addons/garryscape/lua/garryscape')
         (self.repo/'converter/target/release').mkdir(parents=True)
@@ -76,6 +77,7 @@ class Script(unittest.TestCase):
         self.assertFalse(any(p.suffix in {'.qc','.dmx','.glb','.gltf','.bin','.png'} for p in self.addon.rglob('*')))
         self.assertTrue((self.addon/'lua/autorun/server/garryscape_preview.lua').is_file())
         self.assertTrue((self.addon/'lua/autorun/client/garryscape_shader.lua').is_file())
+        self.assertTrue((self.addon/'lua/autorun/client/garryscape_utilities.lua').is_file())
         self.assertTrue((self.addon/'lua/garryscape/atlas_shader.lua').is_file())
     def test_default_installs_under_garrysmod_directory(self):
         game=self.path/'Steam/GarrysMod'

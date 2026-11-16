@@ -58,6 +58,24 @@ pub fn write(baked: &RegionMesh, png: &[u8], path: &Path, id: &str) -> Result<()
         &floats(vertices.iter().flat_map(|v| v.uv)),
         Some(34962),
     );
+    // A separate preview-only UV channel carries local terrain coordinates and
+    // layer. Original repeat UVs remain untouched in TEXCOORD_0.
+    let terrain = view(
+        &mut bin,
+        &mut views,
+        &floats(baked.triangles.iter().flat_map(|t| {
+            t.vertices
+                .map(|v| {
+                    [
+                        (v.pos[0] * baked.mapping[0] + 4096.) / 128.,
+                        (v.pos[1] * baked.mapping[0] + 4096.) / 128. + t.layer as f32 * 128.,
+                    ]
+                })
+                .into_iter()
+                .flatten()
+        })),
+        Some(34962),
+    );
     let min = [
         baked.bounds[0][0] * 0.0254,
         baked.bounds[0][2] * 0.0254,
@@ -73,6 +91,9 @@ pub fn write(baked: &RegionMesh, png: &[u8], path: &Path, id: &str) -> Result<()
         json!({"bufferView":normal,"componentType":5126,"count":vertices.len(),"type":"VEC3"}),
         json!({"bufferView":uv,"componentType":5126,"count":vertices.len(),"type":"VEC2"}),
     ];
+    accessors.push(
+        json!({"bufferView":terrain,"componentType":5126,"count":vertices.len(),"type":"VEC2"}),
+    );
     let mut primitives = vec![];
     let mut materials = vec![];
     for (material, surface) in baked.materials.iter().enumerate() {
@@ -103,7 +124,7 @@ pub fn write(baked: &RegionMesh, png: &[u8], path: &Path, id: &str) -> Result<()
         };
         materials.push(json!({"name":format!("{id}_{material}"),"pbrMetallicRoughness":pbr,"alphaMode":if water {"BLEND"}else{"OPAQUE"},"doubleSided":false,
             "extras":{"garryscapeAtlas":{"rect":surface.rect,"atlasWidth":baked.width,"atlasHeight":baked.height,"nativeTexture":surface.texture,"requiresAtlasWrap":true,"binding":material}}}));
-        primitives.push(json!({"attributes":{"POSITION":0,"NORMAL":1,"TEXCOORD_0":2},"indices":accessor,"material":material,"mode":4}));
+        primitives.push(json!({"attributes":{"POSITION":0,"NORMAL":1,"TEXCOORD_0":2,"TEXCOORD_1":3},"indices":accessor,"material":material,"mode":4}));
     }
     pad(&mut bin, 0);
     fs::create_dir_all(path)?;
@@ -138,6 +159,8 @@ mod tests {
                 water: false,
                 material: 0,
                 underwater: false,
+                layer: 0,
+                blend_address: 0,
             }],
             pixels: vec![
                 255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 10, 20, 30, 255,
@@ -147,8 +170,11 @@ mod tests {
                 tint: [1.; 4],
                 texture: 0,
                 water: false,
+                scale: 128.,
             }],
             atlas_images: vec![],
+            blending: Default::default(),
+            mapping: [1., 4096., 0., 0.],
             underwater_triangles: 0,
             width: 2,
             height: 2,

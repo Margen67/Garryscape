@@ -2,7 +2,7 @@
 -- Exercise teleport hooks without pretending to run the Source engine.
 local script = "addons/garryscape/lua/autorun/server/garryscape_preview.lua"
 local hooks, timers, map, config, entities, errors, validModel
-function AddCSLuaFile(path) assert(path=="autorun/client/garryscape_shader.lua" or path=="garryscape/atlas_shader.lua") end
+function AddCSLuaFile(path) assert(path=="autorun/client/garryscape_utilities.lua" or path=="autorun/client/garryscape_shader.lua" or path=="garryscape/atlas_shader.lua") end
 function Vector(x,y,z) return {x=x,y=y,z=z} end
 function Angle(p,y,r) return {p=p,y=y,r=r} end
 function isstring(value) return type(value) == "string" end

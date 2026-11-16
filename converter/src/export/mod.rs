@@ -47,21 +47,37 @@ pub fn write(baked: &RegionMesh, root: &Path, namespace: &str, id: &str) -> Resu
             "GarryscapeAtlas"
         };
         let t = surface.tint;
-        fs::write(materials.join(format!("{id}_{i}.vmt")),format!("\"VertexLitGeneric\"\n{{\n\"EGSMShader\" \"{shader}\"\n\"$basetexture\" \"models/garryscape/{namespace}/regions/{id}\"\n\"$atlasrect\" \"[{x} {y} {w} {h}]\"\n\"$atlasinfo\" \"[{} {w} {h} {}]\"\n\"$atlasdimensions\" \"[{} {} 0 0]\"\n\"$tint\" \"[{} {} {} {}]\"\n{alpha}}}\n",baked.width,if w>0 {w.ilog2()}else{0},baked.width,baked.height,t[0],t[1],t[2],t[3]))?;
+        let [cx, cy, cs, _] = baked.blending.rect;
+        let [m0, m1, m2, m3] = baked.mapping;
+        fs::write(materials.join(format!("{id}_{i}.vmt")), format!(
+            "\"VertexLitGeneric\"\n{{\n\"EGSMShader\" \"{shader}\"\n\"$basetexture\" \"models/garryscape/{namespace}/regions/{id}\"\n\"$atlasrect\" \"[{x} {y} {w} {h}]\"\n\"$atlasinfo\" \"[{aw} {w} {h} {mip}]\"\n\"$atlasdimensions\" \"[{aw} {ah} 0 0]\"\n\"$tint\" \"[{r} {g} {b} {a}]\"\n\"$blendcontrol\" \"[{cx} {cy} {cs} 0]\"\n\"$regionmapping\" \"[{m0} {m1} {m2} {m3}]\"\n\"$texturescale\" \"[{scale} 0 0 0]\"\n{alpha}}}\n",
+            aw=baked.width, ah=baked.height, mip=if w>0 {w.ilog2()}else{0},
+            r=t[0],g=t[1],b=t[2],a=t[3],scale=surface.scale))?;
     }
     fs::write(
         preview.join("open_in_blender.py"),
         include_str!("../../../tools/preview_atlas.py"),
+    )?;
+    fs::write(
+        preview.join("ground_blending.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "blending":baked.blending,"mapping":baked.mapping,
+        "floors":baked.blending.floors.iter().map(|(&id,f)| (id.to_string(),serde_json::json!({
+            "rect":baked.atlas_images.iter().find(|i|i.source_ids.contains(&f.texture)).map_or([0;4],|i|i.rect),
+            "tint":baked.blending.tints[&id],"texture":f.texture,"scale":f.scale
+        }))).collect::<std::collections::BTreeMap<_,_>>(),
+            "triangles":baked.triangles.iter().map(|t|t.layer).collect::<Vec<_>>()
+        }))?,
     )?;
     dmx::write(baked, &source, namespace, id)?;
     fs::write(root.join("game/gameinfo.txt"),"\"GameInfo\"\n{\n\"game\" \"Garryscape asset build\"\n\"FileSystem\"\n{\n\"SteamAppId\" \"4000\"\n\"SearchPaths\"\n{\n\"game\" \"|gameinfo_path|.\"\n}\n}\n}\n")?;
     fs::write(
         root.join("manifest.json"),
         serde_json::to_vec_pretty(&serde_json::json!({
-            "schema":3,"region":id,"namespace":namespace,"triangles":baked.triangles.len(),"trianglesPerFloor":baked.plane_triangles,
+            "schema":4,"region":id,"namespace":namespace,"triangles":baked.triangles.len(),"trianglesPerFloor":baked.plane_triangles,
             "tiles":baked.tiles,"uniqueImages":baked.unique_tiles,"atlasWidth":baked.width,"atlasHeight":baked.height,"textureCount":1,"collision":false,"padding":0,"resizedImages":0,
             "materialCount":baked.materials.len(),"materials":baked.materials,"atlasImages":baked.atlas_images,
-            "shaderModule":"EGSM","underwaterTriangles":baked.underwater_triangles,
+            "shaderModule":"EGSM","groundBlending":baked.blending,"regionMapping":baked.mapping,"underwaterTriangles":baked.underwater_triangles,
             "nativeSurfaceTriangles":baked.triangles.iter().filter(|t|!t.underwater).count(),
             "waterTriangles":baked.triangles.iter().filter(|t|t.water).count(),
             "sourceBounds":baked.bounds,"model":format!("models/garryscape/{namespace}/regions/{id}.mdl"),

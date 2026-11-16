@@ -13,14 +13,15 @@ game={GetMap=function() return "garryscape" end}
 EGSM={Version=2}
 local compiled,shaders,errors={},{},{}
 local callbacks={}
-local anisotropy=8
+local values={mat_forceaniso=8,mat_filtertextures=1,mat_mipmaptextures=1,garryscape_ground_blending=1}
 function GetConVar(name)
-    assert(name=="mat_forceaniso")
-    return {GetFloat=function() return anisotropy end}
+    if values[name]==nil then return nil end
+    return {GetFloat=function() return values[name] end,GetBool=function() return values[name]>0 end}
 end
+function CreateClientConVar(name,default) values[name]=values[name] or tonumber(default);return GetConVar(name) end
 math.Clamp=function(n,lo,hi) return math.max(lo,math.min(n,hi)) end
 cvars={AddChangeCallback=function(name,callback,id)
-    assert(name=="mat_forceaniso" and id=="GarryscapeAtlasFiltering")
+    assert(values[name]~=nil)
     callbacks[name]=callback
 end}
 function ErrorNoHalt(message) errors[#errors+1]=message end
@@ -48,9 +49,13 @@ shaderlib={
             return #self.parameters
         end
         function shader:SetPixelShaderConstant(index,x,y,z,w)
-            assert(index==43 and y==0 and z==0 and w==0)
-            self.filter=x
+            assert(w==0)
+            if index==43 then self.filter=x;self.textureFilter=y;self.mipmaps=z
+            elseif index==47 then self.blending=x
+            elseif index==49 then self.water=x
+            else error("unexpected uniform "..index) end
         end
+        function shader:SetVertexShaderConstantFP(index,param) assert(index==48);self.mapping=self.parameters[param] end
         function shader:SetPixelShaderConstantFP(index,param) self.constants[index]=self.parameters[param] end
         function shader:SetPixelShaderStandardConstant(index,constant) assert(index and constant) end
         function shader:SetFlags(value) self.flags=value end
@@ -71,13 +76,25 @@ end
 assert(shaders.GarryscapeAtlas.flags==0 and shaders.GarryscapeAtlasWater.flags==MATERIAL_VAR_TRANSLUCENT)
 for _,shader in pairs(shaders) do assert(shader.filter==8) end
 for _,setting in ipairs({0,1,2,4,8,16,32}) do
+    values.mat_forceaniso=setting
     callbacks.mat_forceaniso("mat_forceaniso","8",tostring(setting))
     for _,shader in pairs(shaders) do
         assert(shader.filter==math.Clamp(setting,1,16))
     end
 end
+for _,name in ipairs({"mat_filtertextures","mat_mipmaptextures","garryscape_ground_blending"}) do
+    for _,value in ipairs({0,1}) do
+        values[name]=value;callbacks[name]()
+        for _,shader in pairs(shaders) do
+            if name=="mat_filtertextures" then assert(shader.textureFilter==value)
+            elseif name=="mat_mipmaptextures" then assert(shader.mipmaps==value)
+            else assert(shader.blending==value) end
+        end
+    end
+end
+assert(shaders.GarryscapeAtlas.water==0 and shaders.GarryscapeAtlasWater.water==1)
 -- Reinitialization replaces the named callback and reads the current setting.
-anisotropy=4
+values.mat_forceaniso=4
 include("garryscape/atlas_shader.lua")
 for _,shader in pairs(shaders) do assert(shader.filter==4) end
 EGSM=nil

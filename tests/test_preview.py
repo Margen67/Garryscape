@@ -37,6 +37,8 @@ class Preview(unittest.TestCase):
 
     def test_lifecycle(self):
         self.run_lua('tests/test_preview.lua')
+    def test_utilities_panel(self):
+        self.run_lua('tests/test_utilities.lua')
     def test_native_shader_setup(self):
         self.run_lua('tests/test_atlas_shader.lua')
 

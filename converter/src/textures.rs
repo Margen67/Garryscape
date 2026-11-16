@@ -70,6 +70,19 @@ impl Textures {
     }
 }
 impl Textures {
+    pub fn add_control(&mut self, id: i32, size: usize, pixels: Vec<[u8; 4]>) {
+        self.images.insert(
+            id,
+            Texture {
+                pixels,
+                size,
+                effect: 0,
+                brightness: 0,
+                boost: 0,
+                dependency: vec![],
+            },
+        );
+    }
     pub fn new(cache: &mut Cache) -> Result<Self> {
         let bytes = cache.file(26, 0, 0)?;
         let mut r = Reader::new(&bytes);

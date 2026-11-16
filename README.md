@@ -69,6 +69,7 @@ output/2009scape/regions/50_50/
     50_50.bin
     50_50.png
     open_in_blender.py
+    ground_blending.json
   source/garryscape/2009scape/regions/50_50/
     model.qc
     reference_0.dmx ... reference_4.dmx
@@ -109,10 +110,13 @@ The single atlas contains native procedural texture images at their native
 size are deduplicated. No image is enlarged, reduced, tinted, or given a border.
 Unused outer atlas space is cropped to power-of-two width and height independently.
 Transparent pixels inside each packed image are retained. Nothing is resized or
-padded, and mesh geometry and native UVs remain unchanged. The shader and Blender
+padded, and mesh geometry and native texture mapping remain unchanged. The shader and Blender
 loader read per-region dimensions, including larger or rectangular atlases.
-Floor colour modulation remains a material parameter. Normal VTF mipmaps retain
-the full-resolution base level.
+Base floor colour modulation remains a material parameter; blended layer tints
+are stored with the interpolation controls. Normal VTF mipmaps retain the
+full-resolution base level. `NOLOD` prevents texture-detail/picmip reduction from
+corrupting the atlas control bytes; it does not disable mipmaps or the filtering
+convars.
 
 Region 50/50 has **10,733 surface triangles and 742 underwater triangles**.
 The native-image atlas is **1024×512**, about **2.67 MiB** as lossless RGBA8888
@@ -137,7 +141,9 @@ there are no per-frame Lua model conversions or draw loops. The shader wraps
 UVs within each native image, including bilinear/trilinear filtering at image
 edges without neighboring atlas images bleeding in. Atlas-safe anisotropic
 sampling follows `mat_forceaniso` (up to 16x; 0/1 uses isotropic trilinear
-filtering). Changes update shader constants through a convar callback, without
+filtering). `mat_filtertextures 0` selects nearest texels, and
+`mat_mipmaptextures 0` samples mip level zero. These settings also affect
+textures sampled during blending. Changes update shader constants through convar callbacks, without
 per-frame Lua polling or asset recompilation. Higher settings cost more GPU
 texture samples. Source ambient lighting,
 dynamic lights, and flashlight support use EGSM's standard Source constants.
@@ -146,8 +152,22 @@ The image is unchanged and the source UVs retain their original repeat frequency
 **Windows/EGSM GPU execution still needs in-game verification.** The module is
 required for correct native-model atlas rendering; stock `VertexLitGeneric`
 does not independently repeat packed images. Missing EGSM produces a diagnostic.
-The previous texture-baked ground transitions have been removed; the exact RT4
-HD ground blend passes are not yet ported. HD water animation, depth fog and
+Ground blending uses RT4's underlay corner texture priorities, overlay blend
+flags, rotated shape extensions, and neighboring edge/corner masks. The Rust
+converter prepares compact, deduplicated triangle interpolation controls inside
+the same atlas; it does not rasterize terrain or resize the native images.
+The shader evaluates those controls only on blended triangles. Blender's loader
+uses shared analytic mask nodes for the same transitions.
+
+Toggle blending at **Utilities → Garryscape → Terrain → Ground blending**, or
+with `garryscape_ground_blending 0/1`. It defaults to enabled, is saved on the
+client, and changes immediately without rebuilding. Source's single model UV
+channel carries the precomputed blend address and terrain layer; the shader
+recovers the native repeat coordinates from the unchanged local positions.
+The glTF preview retains native UVs and adds a separate terrain-control channel.
+No per-frame Lua calculation or cache decoding is needed.
+
+HD water animation, depth fog and
 the original RT4 lighting model are not
 recreated by this atlas shader. Cache water RGBA is retained rather than replaced
 with an invented alpha clamp. Underwater geometry is exported independently of

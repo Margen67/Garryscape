@@ -1,0 +1,10 @@
+Ground blending lookup tables and mask construction in
+converter/src/blending.rs are adapted from the 2009Scape RT4 client:
+
+https://gitlab.com/2009scape/rt4-client
+Revision: 61b952d2b46132b9a5d696f4e0c4c0df75c7f6d2
+Files: client/src/main/java/rt4/SceneGraph.java and FloType.java
+
+The upstream project distributes this code under the GNU Affero General
+Public License, version 3. The license text is included in ../LICENSE.
+The Rust translation and atlas control encoding use the same license.

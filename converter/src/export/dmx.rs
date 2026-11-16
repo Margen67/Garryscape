@@ -150,7 +150,11 @@ pub fn body(triangles: &[Triangle], id: &str, number: usize) -> String {
     d.array(
         "textureCoordinates",
         "vector2",
-        verts.iter().map(|v| format!("{} {}", v.uv[0], v.uv[1])),
+        triangles.iter().flat_map(|t| {
+            t.vertices
+                .iter()
+                .map(move |_| format!("{} {}", t.blend_address, t.layer))
+        }),
     );
     d.array(
         "textureCoordinatesIndices",
@@ -211,6 +215,8 @@ mod tests {
             water: false,
             material: 0,
             underwater: false,
+            layer: 0,
+            blend_address: 0,
         };
         let a = body(std::slice::from_ref(&t), "50_50", 0);
         let b = body(&[t], "50_50", 1);

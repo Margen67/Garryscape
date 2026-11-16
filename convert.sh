@@ -112,6 +112,7 @@ for asset in "$GAME/materials/models/garryscape/$NAME/regions/${RX}_${RY}.vtf" "
 done
 copy_asset "$ROOT/LICENSE" "$STAGED/LICENSE"
 copy_asset "$ROOT/addons/garryscape/lua/autorun/server/garryscape_preview.lua" "$STAGED/lua/autorun/server/garryscape_preview.lua"
+copy_asset "$ROOT/addons/garryscape/lua/autorun/client/garryscape_utilities.lua" "$STAGED/lua/autorun/client/garryscape_utilities.lua"
 copy_asset "$ROOT/addons/garryscape/lua/autorun/client/garryscape_shader.lua" "$STAGED/lua/autorun/client/garryscape_shader.lua"
 copy_asset "$ROOT/addons/garryscape/lua/garryscape/atlas_shader.lua" "$STAGED/lua/garryscape/atlas_shader.lua"
 copy_asset "$BUILD/manifest.json" "$STAGED/data/garryscape/terrain_preview.json"

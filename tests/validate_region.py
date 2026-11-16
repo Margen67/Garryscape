@@ -6,6 +6,7 @@ import math
 from pathlib import Path
 import re
 import struct
+import zlib
 import sys
 
 
@@ -81,6 +82,47 @@ def validate(root):
     assert width >= 2 and height >= 2 and width & (width-1) == height & (height-1) == 0
     assert header[56] == max(width, height).bit_length()
     assert textures[0].stat().st_size == 80 + sum(4 * max(width >> i, 1) * max(height >> i, 1) for i in range(header[56]))
+    base = textures[0].read_bytes()[-width*height*4:]
+    for image in manifest['atlasImages']:
+        x,y,w,h = image['rect']
+        raw = b''.join(base[((y+j)*width+x)*4:((y+j)*width+x+w)*4] for j in range(h))
+        assert zlib.crc32(raw) == image['crc'], 'native atlas image pixels changed'
+    assert struct.unpack_from('<I', header, 20)[0] & 0x200, 'control data needs NOLOD protection'
+    blend = manifest['groundBlending']
+    cx,cy,side,_ = blend['rect']
+    def control(index):
+        assert 0 <= index < side*side
+        offset = ((cy+index//side)*width+cx+index%side)*4
+        return tuple(base[offset:offset+4])
+    def address(p): return p[0]+256*p[1]+65536*p[2]
+    # EGSM uses sRGB reads for the albedo sampler. The shader restores encoded
+    # control bytes before interpreting addresses, masks and descriptor fields.
+    for byte in range(256):
+        encoded=byte/255
+        linear=encoded/12.92 if encoded<=0.04045 else ((encoded+0.055)/1.055)**2.4
+        restored=linear*12.92 if linear<=0.0031308 else 1.055*linear**(1/2.4)-0.055
+        assert round(restored*255)==byte
+    checked = set()
+    for cell,plan in enumerate(blend['grid']):
+        pointer = address(control(cell))
+        if plan == 0:
+            assert pointer == 0
+            continue
+        if pointer in checked: continue
+        checked.add(pointer)
+        layers = blend['plans'][plan]
+        assert control(pointer)[0] == len(layers)
+        pointer += 1
+        for layer in layers:
+            header = control(pointer);pointer += 1
+            assert header[3] == len(layer['triangles'])
+            descriptor = address(header)
+            assert control(descriptor+4)[0]+256*control(descriptor+4)[1] > 0
+            for triangle in layer['triangles']:
+                for vertex in triangle:
+                    assert control(pointer)[:3] == tuple(vertex)
+                    pointer += 1
+    assert checked, 'no ground blending controls exported'
     for path in materials.glob('*.vmt'):
         vmt = path.read_text()
         assert '\n\n' not in vmt and vmt.endswith('}\n')
@@ -121,6 +163,7 @@ def validate(root):
             px, pz = (x - 32) * unit, -(y - 32) * unit
             heights = [v[1] for v in vertices if abs(v[0]-px) < 1e-5 and abs(v[2]-pz) < 1e-5]
             assert heights and all(abs(h) < 1e-5 for h in heights), f'shoreline gap at {x}/{y}: {heights}'
+    assert all('TEXCOORD_1' in p['attributes'] for p in doc['meshes'][0]['primitives'])
     normals = array(1, 3)
     assert all(all(math.isfinite(v) for v in a) for a in vertices + normals)
     assert all(abs(sum(v*v for v in n) - 1) < 1e-5 for n in normals)

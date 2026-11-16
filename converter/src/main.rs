@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 mod binary;
+mod blending;
 mod cache;
 mod export;
 mod region;

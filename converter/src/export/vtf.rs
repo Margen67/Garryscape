@@ -25,7 +25,10 @@ pub fn write(baked: &RegionMesh, path: &Path) -> Result<()> {
     header[12..16].copy_from_slice(&80u32.to_le_bytes());
     header[16..18].copy_from_slice(&(baked.width as u16).to_le_bytes());
     header[18..20].copy_from_slice(&(baked.height as u16).to_le_bytes());
-    header[20..24].copy_from_slice(&(0x2000u32 | 8 | 4 | 2).to_le_bytes());
+    // Control bytes share the albedo atlas. Texture-detail/picmip reduction
+    // would destroy them; NOLOD protects the base level without disabling mips.
+    let no_lod = if baked.blending.rect[2] > 0 { 0x200 } else { 0 };
+    header[20..24].copy_from_slice(&(0x2000u32 | 8 | 4 | 2 | no_lod).to_le_bytes());
     header[24..26].copy_from_slice(&1u16.to_le_bytes());
     header[48..52].copy_from_slice(&1f32.to_le_bytes());
     header[52..56].copy_from_slice(&0u32.to_le_bytes());
