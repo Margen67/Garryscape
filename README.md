@@ -63,7 +63,7 @@ rather than silently substituting a texture.
 For `regions 50 50`, namespace `2009scape`:
 
 ```text
-output/build/2009scape/regions/50_50/
+output/2009scape/regions/50_50/
   preview/
     50_50.gltf
     50_50.bin
@@ -160,7 +160,7 @@ mesh vertices, triangles, or UVs:
 ```bash
 # After conversion, open the preview in a new Blender process:
 '/c/Program Files (x86)/Steam/steamapps/common/Blender/blender.exe' --python \
-  "$PWD/output/build/2009scape/regions/50_50/preview/open_in_blender.py"
+  "$PWD/output/2009scape/regions/50_50/preview/open_in_blender.py"
 ```
 
 Use that loader for correct atlas wrapping. Plain glTF import preserves the
@@ -201,7 +201,7 @@ cargo test --locked --manifest-path converter/Cargo.toml
 cargo clippy --locked --manifest-path converter/Cargo.toml --all-targets -- -D warnings
 bash -n convert.sh
 ./convert.sh regions 50 50 --cache /path/to/cache --preview-only
-python tests/validate_region.py output/build/2009scape/regions/50_50
+python tests/validate_region.py output/2009scape/regions/50_50
 python tests/test_script.py
 python tests/test_preview.py  # optional liblua 5.3/5.4 for the lifecycle harness
 ```

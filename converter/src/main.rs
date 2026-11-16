@@ -90,7 +90,7 @@ fn run() -> Result<()> {
     let cache_path = cache_path.context("Set --cache or the UserProfile environment variable")?;
     let mut cache=cache::Cache::new(&cache_path).context("2009Scape cache not found; supply your revision-530 cache with --cache. No cache is downloaded.")?;
     let id = format!("{x}_{y}");
-    let build = output.join("build").join(&name).join("regions").join(&id);
+    let build = output.join(&name).join("regions").join(&id);
     fs::create_dir_all(&build)?;
     let fingerprint = fingerprint(&cache_path, scale, &name, x, y)?;
     let marker = build.join("complete.json");

@@ -66,7 +66,7 @@ cargo build --locked --release --manifest-path "$ROOT/converter/Cargo.toml"
 CLI="$ROOT/converter/target/release/garryscape-convert"
 [[ ! -f $CLI.exe ]] || CLI=$CLI.exe
 "$CLI" regions "$RX" "$RY" --cache "$(native_path "$CACHE")" --scale "$SCALE" --name "$NAME" --output "$(native_path "$OUTPUT")" "${REBUILD[@]}"
-BUILD="$OUTPUT/build/$NAME/regions/${RX}_${RY}"
+BUILD="$OUTPUT/$NAME/regions/${RX}_${RY}"
 SOURCE="$BUILD/source/garryscape/$NAME/regions/${RX}_${RY}"
 GAME="$BUILD/game"
 if (( PREVIEW )); then echo "Preview ready: $BUILD/preview/${RX}_${RY}.gltf"; exit 0; fi

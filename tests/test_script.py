@@ -12,7 +12,7 @@ REPO = Path(__file__).resolve().parents[1]
 CLI = '''#!/usr/bin/env python3
 import json, pathlib, sys
 args=sys.argv[1:]; out=pathlib.Path(args[args.index('--output')+1]); ns=args[args.index('--name')+1]; key=f'{args[1]}_{args[2]}'
-b=out/'build'/ns/'regions'/key
+b=out/ns/'regions'/key
 s=b/'source/garryscape'/ns/'regions'/key;s.mkdir(parents=True,exist_ok=True)
 (s/'model.qc').write_text(f'$modelname "garryscape/{ns}/regions/{key}.mdl"\\n')
 (b/'game').mkdir(exist_ok=True)
@@ -71,6 +71,8 @@ class Script(unittest.TestCase):
         self.assertEqual(self.counter.read_text().count('compile'),1)
         self.assertTrue(model.is_file())
         self.assertFalse(stale.exists())
+        self.assertFalse((self.path/'relative output/build').exists())
+        self.assertTrue((self.path/'relative output/2009scape/regions/50_50/compiled.json').is_file())
         self.assertFalse(any(p.suffix in {'.qc','.dmx','.glb','.gltf','.bin','.png'} for p in self.addon.rglob('*')))
         self.assertTrue((self.addon/'lua/autorun/server/garryscape_preview.lua').is_file())
         self.assertTrue((self.addon/'lua/autorun/client/garryscape_shader.lua').is_file())
@@ -105,7 +107,7 @@ print(path)
             with self.subTest(mode=mode):
                 r=self.run_script(fail=mode);self.assertNotEqual(r.returncode,0,r.stdout)
                 self.assertFalse(self.addon.exists())
-                self.assertTrue((self.path/'relative output/build/2009scape/regions/50_50/source/garryscape/2009scape/regions/50_50/compile.log').exists())
+                self.assertTrue((self.path/'relative output/2009scape/regions/50_50/source/garryscape/2009scape/regions/50_50/compile.log').exists())
     def test_failure_preserves_previous_installation(self):
         self.assertEqual(self.run_script().returncode,0)
         marker=self.addon/'keep.txt';marker.write_text('previous installation')
