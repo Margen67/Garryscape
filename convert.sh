@@ -61,8 +61,9 @@ ADDON=$(shell_path "$ADDON")
 if [[ -f $STUDIOMDL ]]; then STUDIOMDL="$(cd -- "$(dirname -- "$STUDIOMDL")" && pwd)/$(basename -- "$STUDIOMDL")"; fi
 [[ -f "$CACHE/main_file_cache.dat2" || -f "$CACHE/main_file_cache.dat2.dat" || -f "$CACHE/LIVE/main_file_cache.dat2" || -f "$CACHE/LIVE/main_file_cache.dat2.dat" ]] || fail "2009Scape cache not found in $CACHE. Supply your revision-530 cache with --cache; no cache is downloaded."
 if (( ! PREVIEW )); then [[ -f $STUDIOMDL ]] || fail "StudioMDL not found: $STUDIOMDL (use --preview-only to export without it)"; fi
-command -v cargo >/dev/null 2>&1 || fail 'Rust/Cargo is required: https://rustup.rs'
-cargo build --locked --release --manifest-path "$ROOT/converter/Cargo.toml"
+command -v cargo >/dev/null 2>&1 || fail 'Nightly Rust/Cargo is required: https://rustup.rs'
+# Resolve the pinned nightly even when this script is called outside the repo.
+(cd -- "$ROOT" && cargo build --locked --release --manifest-path "$ROOT/converter/Cargo.toml")
 CLI="$ROOT/converter/target/release/garryscape-convert"
 [[ ! -f $CLI.exe ]] || CLI=$CLI.exe
 "$CLI" regions "$RX" "$RY" --cache "$(native_path "$CACHE")" --scale "$SCALE" --name "$NAME" --output "$(native_path "$OUTPUT")" "${REBUILD[@]}"

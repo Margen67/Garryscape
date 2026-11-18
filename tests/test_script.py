@@ -42,6 +42,7 @@ class Script(unittest.TestCase):
         self.repo = self.path/'repo with spaces';self.repo.mkdir()
         shutil.copy(REPO/'convert.sh',self.repo/'convert.sh')
         shutil.copy(REPO/'LICENSE',self.repo/'LICENSE')
+        shutil.copy(REPO/'rust-toolchain.toml',self.repo/'rust-toolchain.toml')
         (self.repo/'addons/garryscape/lua/autorun/server').mkdir(parents=True)
         shutil.copy(REPO/'addons/garryscape/lua/autorun/server/garryscape_preview.lua',self.repo/'addons/garryscape/lua/autorun/server')
         (self.repo/'addons/garryscape/lua/autorun/client').mkdir(parents=True)
@@ -51,11 +52,11 @@ class Script(unittest.TestCase):
         shutil.copy(REPO/'addons/garryscape/lua/garryscape/atlas_shader.lua',self.repo/'addons/garryscape/lua/garryscape')
         (self.repo/'converter/target/release').mkdir(parents=True)
         self.exe(self.repo/'converter/target/release/garryscape-convert',CLI)
-        self.bin=self.path/'bin';self.bin.mkdir();self.exe(self.bin/'cargo','#!/bin/sh\nexit 0\n')
+        self.bin=self.path/'bin';self.bin.mkdir();self.exe(self.bin/'cargo','#!/bin/sh\ntest "$PWD" = "$GARRYSCAPE_TEST_CARGO_ROOT" || exit 41\ntest -f rust-toolchain.toml || exit 42\nexit 0\n')
         self.compiler=self.path/'fake studiomdl.exe';self.exe(self.compiler,COMPILER)
         self.cache=self.path/'cache';self.cache.mkdir();(self.cache/'main_file_cache.dat2').write_bytes(b'cache')
         self.addon=self.path/'installed addon';self.counter=self.path/'counter'
-        self.env=dict(os.environ,PATH=str(self.bin)+os.pathsep+os.environ['PATH'],COUNTER=str(self.counter))
+        self.env=dict(os.environ,PATH=str(self.bin)+os.pathsep+os.environ['PATH'],COUNTER=str(self.counter),GARRYSCAPE_TEST_CARGO_ROOT=str(self.repo))
     def tearDown(self):self.tmp.cleanup()
     def exe(self,p,text):p.write_text(text);p.chmod(0o755)
     def run_script(self,*extra,fail=None,default_addon=False):

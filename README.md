@@ -11,9 +11,11 @@ converter, not the former lost release; see [RECOVERY.md](RECOVERY.md).
 
 ## Windows / Git Bash
 
-Install [Rust](https://rustup.rs/) (the MSVC toolchain also needs Visual Studio's
-C++ build tools and Windows SDK), Garry's Mod, and optionally Blender. The script
-works from any working directory, including paths containing spaces. Run:
+Install [Rust through rustup](https://rustup.rs/) (the MSVC toolchain also needs
+Visual Studio's C++ build tools and Windows SDK), Garry's Mod, and optionally
+Blender. The repository pins **nightly-2026-11-18** with Clippy and rustfmt in
+`rust-toolchain.toml`; rustup installs that toolchain on first use. The script
+selects it from any working directory, including paths containing spaces. Run:
 
 ```bash
 ./convert.sh regions 50 50
@@ -230,8 +232,8 @@ python tests/test_preview.py  # optional liblua 5.3/5.4 for the lifecycle harnes
 python tests/test_hlsl.py     # optional native Microsoft HLSL compiler harness
 ```
 
-`converter/Cargo.toml` enables all 54 opt-in compiler lints accepted by the
-current stable toolchain (Rust 1.99.1), plus every public Clippy group: `all`,
+`converter/Cargo.toml` enables all 63 opt-in compiler lints in the pinned nightly
+toolchain (Rust 1.102.0-nightly), plus every public Clippy group: `all`,
 `pedantic`, `nursery`, `restriction`, and `cargo`. Default compiler errors and
 Clippy correctness errors retain their severity. Clippy checks run with
 `cargo clippy`; ordinary builds run the compiler checks.
@@ -240,8 +242,9 @@ The complete warning baseline is currently advisory and includes conflicting
 restriction rules. Add `-- -D warnings` to Clippy for a strict gate; the current
 baseline does not pass that gate. Rust has no universal `-Wall` group, so its
 explicit opt-in list needs updating when new compiler lints become available.
-Nightly-only lints are unavailable on the stable toolchain; this configuration
-does not bypass compiler feature gates.
+Nightly-only lint feature gates are enabled explicitly in the converter crate;
+no `RUSTC_BOOTSTRAP` override is used. Run Cargo commands from the repository
+root or its `converter` directory to select the pinned toolchain automatically.
 
 For visual inspection, use the Blender loader above; Blender is not required to
 convert or compile. Linux can export the inputs using `--preview-only`; actual

@@ -1,4 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+// Feature gates needed to activate the nightly-only compiler lint checks.
+#![feature(
+    link_llvm_intrinsics,
+    marked_unchecked_type_aliases,
+    multiple_supertrait_upcastable,
+    must_not_suspend,
+    non_exhaustive_omitted_patterns_lint,
+    strict_provenance_lints,
+    supertrait_item_shadowing,
+    unqualified_local_imports,
+)]
 mod binary;
 mod blending;
 mod cache;
