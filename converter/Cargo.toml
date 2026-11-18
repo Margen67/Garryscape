@@ -4,6 +4,10 @@ version = "0.9.0"
 edition = "2021"
 license = "AGPL-3.0-only"
 description = "Offline 2009Scape terrain to glTF and Source DMX converter"
+repository = "https://github.com/Margen67/Garryscape"
+readme = "../README.md"
+keywords = ["runescape", "garrysmod", "converter", "gltf", "source-engine"]
+categories = ["command-line-utilities", "game-development", "encoding"]
 
 [dependencies]
 anyhow = "1"
@@ -13,3 +17,74 @@ crc32fast = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 png = "0.17"
+
+# rustc has no equivalent of -Wall. Enable every opt-in lint accepted by the
+# current stable compiler (rustc 1.99.1); retain default warning/error levels
+# for the remaining lints. Update this list when upgrading the toolchain.
+[lints.rust]
+warnings = "warn"
+absolute_paths_not_starting_with_crate = "warn"
+ambiguous_negative_literals = "warn"
+closure_returning_async_block = "warn"
+dead_code_pub_in_binary = "warn"
+deprecated_in_future = "warn"
+deprecated_safe_2024 = "warn"
+deref_into_dyn_supertrait = "warn"
+edition_2024_expr_fragment_specifier = "warn"
+elided_lifetimes_in_paths = "warn"
+explicit_outlives_requirements = "warn"
+ffi_unwind_calls = "warn"
+if_let_rescope = "warn"
+impl_trait_overcaptures = "warn"
+impl_trait_redundant_captures = "warn"
+keyword_idents_2018 = "warn"
+keyword_idents_2024 = "warn"
+let_underscore_drop = "warn"
+linker_info = "warn"
+macro_use_extern_crate = "warn"
+meta_variable_misuse = "warn"
+missing_copy_implementations = "warn"
+missing_debug_implementations = "warn"
+missing_docs = "warn"
+missing_unsafe_on_extern = "warn"
+non_ascii_idents = "warn"
+raw_borrows_via_references = "warn"
+redundant_imports = "warn"
+redundant_lifetimes = "warn"
+rust_2021_incompatible_closure_captures = "warn"
+rust_2021_incompatible_or_patterns = "warn"
+rust_2021_prefixes_incompatible_syntax = "warn"
+rust_2021_prelude_collisions = "warn"
+rust_2024_guarded_string_incompatible_syntax = "warn"
+rust_2024_incompatible_pat = "warn"
+rust_2024_prelude_collisions = "warn"
+single_use_lifetimes = "warn"
+tail_expr_drop_order = "warn"
+trivial_casts = "warn"
+trivial_numeric_casts = "warn"
+unit_bindings = "warn"
+unnameable_types = "warn"
+unreachable_pub = "warn"
+unsafe_attr_outside_unsafe = "warn"
+unsafe_code = "warn"
+unsafe_op_in_unsafe_fn = "warn"
+unstable_features = "warn"
+unused_crate_dependencies = "warn"
+unused_extern_crates = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+unused_macro_rules = "warn"
+unused_qualifications = "warn"
+unused_results = "warn"
+variant_size_differences = "warn"
+
+# All public Clippy groups, including deliberately strict/contradictory rules.
+# Use warning levels so the complete diagnostic baseline remains visible.
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+restriction = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+# Do not downgrade Clippy's default correctness errors when enabling `all`.
+correctness = { level = "deny", priority = 0 }

@@ -221,7 +221,7 @@ collision is not implemented.
 
 ```bash
 cargo test --locked --manifest-path converter/Cargo.toml
-cargo clippy --locked --manifest-path converter/Cargo.toml --all-targets -- -D warnings
+cargo clippy --locked --manifest-path converter/Cargo.toml --all-targets
 bash -n convert.sh
 ./convert.sh regions 50 50 --cache /path/to/cache --preview-only
 python tests/validate_region.py output/2009scape/regions/50_50
@@ -229,6 +229,19 @@ python tests/test_script.py
 python tests/test_preview.py  # optional liblua 5.3/5.4 for the lifecycle harness
 python tests/test_hlsl.py     # optional native Microsoft HLSL compiler harness
 ```
+
+`converter/Cargo.toml` enables all 54 opt-in compiler lints accepted by the
+current stable toolchain (Rust 1.99.1), plus every public Clippy group: `all`,
+`pedantic`, `nursery`, `restriction`, and `cargo`. Default compiler errors and
+Clippy correctness errors retain their severity. Clippy checks run with
+`cargo clippy`; ordinary builds run the compiler checks.
+
+The complete warning baseline is currently advisory and includes conflicting
+restriction rules. Add `-- -D warnings` to Clippy for a strict gate; the current
+baseline does not pass that gate. Rust has no universal `-Wall` group, so its
+explicit opt-in list needs updating when new compiler lints become available.
+Nightly-only lints are unavailable on the stable toolchain; this configuration
+does not bypass compiler feature gates.
 
 For visual inspection, use the Blender loader above; Blender is not required to
 convert or compile. Linux can export the inputs using `--preview-only`; actual
