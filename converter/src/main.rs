@@ -8,7 +8,7 @@
     non_exhaustive_omitted_patterns_lint,
     strict_provenance_lints,
     supertrait_item_shadowing,
-    unqualified_local_imports,
+    unqualified_local_imports
 )]
 mod binary;
 mod blending;

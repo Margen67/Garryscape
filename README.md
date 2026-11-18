@@ -222,6 +222,7 @@ collision is not implemented.
 ## Validation
 
 ```bash
+cargo fmt --manifest-path converter/Cargo.toml --all -- --check
 cargo test --locked --manifest-path converter/Cargo.toml
 cargo clippy --locked --manifest-path converter/Cargo.toml --all-targets
 bash -n convert.sh
@@ -231,6 +232,12 @@ python tests/test_script.py
 python tests/test_preview.py  # optional liblua 5.3/5.4 for the lifecycle harness
 python tests/test_hlsl.py     # optional native Microsoft HLSL compiler harness
 ```
+
+GitHub Actions runs these checks on **Windows x64 only** using the pinned
+nightly toolchain. Formatting differences and build/test/lint errors fail the
+workflow; the existing Clippy warning baseline remains advisory. Successful
+runs upload the release CLI as the **garryscape-convert-windows-x64** artifact.
+No RuneScape cache or compiled game assets are needed or uploaded by CI.
 
 `converter/Cargo.toml` enables all 63 opt-in compiler lints in the pinned nightly
 toolchain (Rust 1.102.0-nightly), plus every public Clippy group: `all`,
