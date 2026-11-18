@@ -17,17 +17,14 @@ jobs:
     name: Rust checks and converter (Windows x64)
     runs-on: windows-2025
     timeout-minutes: 30
-    defaults:
-      run:
-        shell: pwsh
     steps:
       - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@main
         with:
           persist-credentials: false
 
       - name: Set up pinned nightly Rust for Windows x64
-        run: |
+        run: |-
           if ($env:RUNNER_OS -ne 'Windows' -or $env:RUNNER_ARCH -ne 'X64') {
             throw 'This workflow supports Windows x64 runners only.'
           }
@@ -56,7 +53,7 @@ jobs:
         run: cargo build --locked --release --manifest-path converter/Cargo.toml --target x86_64-pc-windows-msvc --message-format=short
 
       - name: Upload Windows x64 converter
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@main
         with:
           name: garryscape-convert-windows-x64
           path: converter/target/x86_64-pc-windows-msvc/release/garryscape-convert.exe
