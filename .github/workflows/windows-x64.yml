@@ -14,17 +14,13 @@ concurrency:
 
 jobs:
   converter:
-    name: Rust checks and converter (Windows x64, ${{ matrix.configuration }})
+    name: Rust checks and converter (Windows x64, ${{ matrix.profile }})
     runs-on: windows-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - configuration: debug
-            profile: dev
-          - configuration: release
-            profile: release
+        profile: [dev, release]
     steps:
       - name: Check out source
         uses: actions/checkout@main
