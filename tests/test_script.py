@@ -59,7 +59,7 @@ class Script(unittest.TestCase):
         (self.repo/'converter/target/release').mkdir(parents=True)
         self.exe(self.repo/'converter/target/release/garryscape-convert',CLI)
         self.bin=self.path/'bin';self.bin.mkdir();self.exe(self.bin/'cargo','#!/bin/sh\ntest "$PWD" = "$GARRYSCAPE_TEST_CARGO_ROOT" || exit 41\ntest -f rust-toolchain.toml || exit 42\nexit 0\n')
-        self.exe(self.bin/'oxipng', '#!/usr/bin/env python3\nimport sys\nassert sys.argv[1:3] == ["-o", "max"]\n')
+        self.exe(self.bin/'oxipng', '#!/usr/bin/env python3\nimport sys\nassert sys.argv[1:-1] == ["-o", "max", "--strip", "all"]\n')
         self.exe(self.bin/'cwebp', '#!/usr/bin/env python3\nimport pathlib, sys\nassert sys.argv[1:6] == ["-quiet", "-lossless", "-z", "9", "-exact"]\npathlib.Path(sys.argv[-1]).write_bytes(b"webp")\n')
         self.compiler=self.path/'fake studiomdl.exe';self.exe(self.compiler,COMPILER)
         self.cache=self.path/'cache';self.cache.mkdir();(self.cache/'main_file_cache.dat2').write_bytes(b'cache')

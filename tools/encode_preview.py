@@ -66,7 +66,7 @@ def encode_preview(build, region, mode):
         if mode in ("both", "oxipng"):
             png = stage / f"{region}.png"
             shutil.copyfile(source, png)
-            subprocess.run(["oxipng", "-o", "max", str(png)], check=True)
+            subprocess.run(["oxipng", "-o", "max", "--strip", "all", str(png)], check=True)
         if mode in ("both", "webp"):
             subprocess.run(
                 ["cwebp", "-quiet", "-lossless", "-z", "9", "-exact",
