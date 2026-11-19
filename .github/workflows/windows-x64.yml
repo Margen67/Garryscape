@@ -50,6 +50,15 @@ jobs:
       - name: Check Rust formatting
         run: cargo fmt --manifest-path converter/Cargo.toml --all -- --check
 
+      - name: Lint GLua
+        if: matrix.profile == 'dev'
+        run: |-
+          $glualintDir = Join-Path $env:RUNNER_TEMP 'glualint'
+          $archive = "$glualintDir.zip"
+          Invoke-WebRequest -Uri 'https://github.com/FPtje/GLuaFixer/releases/download/1.30.0/glualint-1.30.0-x86_64-windows.zip' -OutFile $archive
+          Expand-Archive -Path $archive -DestinationPath $glualintDir
+          & (Join-Path $glualintDir 'glualint.exe') lint addons tests
+
       - name: Run all enabled Clippy checks
         # Compatible checks are strict; source-scoped exceptions document native math.
         run: cargo clippy --locked --manifest-path converter/Cargo.toml --all-targets --profile ${{ matrix.profile }} --target x86_64-pc-windows-msvc --message-format=short -- -D warnings

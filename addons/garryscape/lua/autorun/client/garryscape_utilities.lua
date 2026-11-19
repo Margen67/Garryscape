@@ -1,10 +1,10 @@
 -- SPDX-License-Identifier: AGPL-3.0-only
-CreateClientConVar("garryscape_ground_blending","1",true,false,"Blend neighboring RuneScape terrain materials")
-hook.Add("PopulateToolMenu","GarryscapeUtilities",function()
-    spawnmenu.AddToolCategory("Utilities","Garryscape","Garryscape")
-    spawnmenu.AddToolMenuOption("Utilities","Garryscape","GarryscapeTerrain","Settings","","",function(panel)
-        panel:ClearControls()
-        panel:CheckBox("Ground blending","garryscape_ground_blending")
-        panel:Help("Blend neighboring ground textures. Changes apply immediately to converted terrain.")
-    end)
-end)
+CreateClientConVar("garryscape_ground_blending", "1", true, false, "Blend neighboring RuneScape terrain materials");
+hook.Add("PopulateToolMenu", "GarryscapeUtilities", function()
+    spawnmenu.AddToolCategory("Utilities", "Garryscape", "Garryscape");
+    spawnmenu.AddToolMenuOption("Utilities", "Garryscape", "GarryscapeTerrain", "Settings", "", "", function(panel)
+        panel:ClearControls();
+        panel:CheckBox("Ground blending", "garryscape_ground_blending");
+        panel:Help("Blend neighboring ground textures. Changes apply immediately to converted terrain.");
+    end);
+end);

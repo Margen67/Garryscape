@@ -48,7 +48,7 @@ VS_OUTPUT main(VS_INPUT v) {
 #endif
     return o;
 }
-]==])
+]==]);
 shaderlib.CompilePixelShader("GarryscapeAtlasPS", 0, [==[
 #include "common_fxc.h"
 #include "shader_constant_register_map.h"
@@ -223,55 +223,66 @@ float4 main(PS_INPUT i) : COLOR {
     return FinalOutput(float4(base.rgb*Modulation.rgb*lighting,base.a*Modulation.a),
         fog,g_fPixelFogType,TONEMAP_SCALE_LINEAR,g_fWriteDepthToAlpha,i.projPos.z);
 }
-]==])
-local atlasShaders={}
+]==]);
+local atlasShaders = {};
 local function updateFiltering()
-    local function setting(name,fallback)
-        local cv=GetConVar(name)
-        return cv and cv:GetFloat() or fallback
+    local function setting(name, fallback)
+        local cv = GetConVar(name);
+        return cv and cv:GetFloat() or fallback;
     end
-    local amount=math.Clamp(setting("mat_forceaniso",1),1,16)
-    local filter=setting("mat_filtertextures",1)>0 and 1 or 0
-    local mips=setting("mat_mipmaptextures",1)>0 and 1 or 0
-    for _,shader in ipairs(atlasShaders) do shader:SetPixelShaderConstant(43,amount,filter,mips,0) end
+
+    local amount = math.Clamp(setting("mat_forceaniso", 1), 1, 16);
+    local filter = setting("mat_filtertextures", 1) > 0 and 1 or 0;
+    local mips = setting("mat_mipmaptextures", 1) > 0 and 1 or 0;
+    for _, shader in ipairs(atlasShaders) do
+        shader:SetPixelShaderConstant(43, amount, filter, mips, 0);
+    end
 end
-local blending=GetConVar("garryscape_ground_blending") or CreateClientConVar("garryscape_ground_blending","1",true,false,"Blend neighboring RuneScape terrain materials")
+
+local blending = GetConVar("garryscape_ground_blending") or CreateClientConVar("garryscape_ground_blending", "1", true, false, "Blend neighboring RuneScape terrain materials");
 local function updateBlending()
-    for _,shader in ipairs(atlasShaders) do shader:SetPixelShaderConstant(47,blending:GetBool() and 1 or 0,0,0,0) end
+    for _, shader in ipairs(atlasShaders) do
+        shader:SetPixelShaderConstant(47, blending:GetBool() and 1 or 0, 0, 0, 0);
+    end
 end
-for _, water in ipairs({false,true}) do
-    local shader=shaderlib.NewShader(water and "GarryscapeAtlasWater" or "GarryscapeAtlas")
-    atlasShaders[#atlasShaders+1]=shader
-    shader:SetVertexShader("GarryscapeAtlasVS")
-    shader:SetPixelShader("GarryscapeAtlasPS")
-    shader:BindTexture(0,PARAM_BASETEXTURE)
-    shader:EnableFlashlightSupport(true)
-    shader:SetPixelShaderConstantFP(40,shader:AddParam("$atlasrect",SHADER_PARAM_TYPE_VEC4,"[0 0 128 128]"))
-    shader:SetPixelShaderConstantFP(41,shader:AddParam("$atlasinfo",SHADER_PARAM_TYPE_VEC4,"[128 128 128 7]"))
-    local mapping=shader:AddParam("$regionmapping",SHADER_PARAM_TYPE_VEC4,"[1 4096 0 0]")
-    shader:SetVertexShaderConstantFP(48,mapping)
-    shader:SetPixelShaderConstantFP(46,mapping)
-    shader:SetPixelShaderConstantFP(45,shader:AddParam("$blendcontrol",SHADER_PARAM_TYPE_VEC4,"[0 0 0 0]"))
-    shader:SetPixelShaderConstantFP(48,shader:AddParam("$texturescale",SHADER_PARAM_TYPE_VEC4,"[128 0 0 0]"))
-    shader:SetPixelShaderConstant(49,water and 1 or 0,0,0,0)
-    shader:SetPixelShaderConstantFP(44,shader:AddParam("$atlasdimensions",SHADER_PARAM_TYPE_VEC4,"[128 128 0 0]"))
-    shader:SetPixelShaderConstantFP(42,shader:AddParam("$tint",SHADER_PARAM_TYPE_VEC4,"[1 1 1 1]"))
+
+for _, water in ipairs({false, true}) do
+    local shader = shaderlib.NewShader(water and "GarryscapeAtlasWater" or "GarryscapeAtlas");
+    atlasShaders[#atlasShaders + 1] = shader;
+    shader:SetVertexShader("GarryscapeAtlasVS");
+    shader:SetPixelShader("GarryscapeAtlasPS");
+    shader:BindTexture(0, PARAM_BASETEXTURE);
+    shader:EnableFlashlightSupport(true);
+    shader:SetPixelShaderConstantFP(40, shader:AddParam("$atlasrect", SHADER_PARAM_TYPE_VEC4, "[0 0 128 128]"));
+    shader:SetPixelShaderConstantFP(41, shader:AddParam("$atlasinfo", SHADER_PARAM_TYPE_VEC4, "[128 128 128 7]"));
+    local mapping = shader:AddParam("$regionmapping", SHADER_PARAM_TYPE_VEC4, "[1 4096 0 0]");
+    shader:SetVertexShaderConstantFP(48, mapping);
+    shader:SetPixelShaderConstantFP(46, mapping);
+    shader:SetPixelShaderConstantFP(45, shader:AddParam("$blendcontrol", SHADER_PARAM_TYPE_VEC4, "[0 0 0 0]"));
+    shader:SetPixelShaderConstantFP(48, shader:AddParam("$texturescale", SHADER_PARAM_TYPE_VEC4, "[128 0 0 0]"));
+    shader:SetPixelShaderConstant(49, water and 1 or 0, 0, 0, 0);
+    shader:SetPixelShaderConstantFP(44, shader:AddParam("$atlasdimensions", SHADER_PARAM_TYPE_VEC4, "[128 128 0 0]"));
+    shader:SetPixelShaderConstantFP(42, shader:AddParam("$tint", SHADER_PARAM_TYPE_VEC4, "[1 1 1 1]"));
     for _, pair in ipairs({
-        {PSREG_LIGHT_INFO_ARRAY,STDCONST_LIGHT_INFO},
-        {PSREG_FOG_PARAMS,STDCONST_FOG_PARAMS},
-        {PSREG_DIFFUSE_MODULATION,STDCONST_DIFFUSE_MODULATION},
-        {PSREG_AMBIENT_CUBE,STDCONST_AMBIENT_CUBE},
-        {PSREG_SHADER_CONTROLS,STDCONST_SHADER_CONTROLS},
-        {PSREG_EYEPOS_SPEC_EXPONENT,STDCONST_EYE_POS}
-    }) do shader:SetPixelShaderStandardConstant(pair[1],pair[2]) end
-    shader:SetFlags(water and MATERIAL_VAR_TRANSLUCENT or 0)
-    shader:SetFlags2(MATERIAL_VAR2_SUPPORTS_HW_SKINNING+MATERIAL_VAR2_LIGHTING_VERTEX_LIT)
+        {PSREG_LIGHT_INFO_ARRAY, STDCONST_LIGHT_INFO},
+        {PSREG_FOG_PARAMS, STDCONST_FOG_PARAMS},
+        {PSREG_DIFFUSE_MODULATION, STDCONST_DIFFUSE_MODULATION},
+        {PSREG_AMBIENT_CUBE, STDCONST_AMBIENT_CUBE},
+        {PSREG_SHADER_CONTROLS, STDCONST_SHADER_CONTROLS},
+        {PSREG_EYEPOS_SPEC_EXPONENT, STDCONST_EYE_POS},
+    }) do
+        shader:SetPixelShaderStandardConstant(pair[1], pair[2]);
+    end
+
+    shader:SetFlags(water and MATERIAL_VAR_TRANSLUCENT or 0);
+    shader:SetFlags2(MATERIAL_VAR2_SUPPORTS_HW_SKINNING + MATERIAL_VAR2_LIGHTING_VERTEX_LIT);
 end
 
 -- Update only when the setting changes, never from a rendering hook.
-updateFiltering()
-for _,name in ipairs({"mat_forceaniso","mat_filtertextures","mat_mipmaptextures"}) do
-    cvars.AddChangeCallback(name,updateFiltering,"GarryscapeAtlasFiltering")
+updateFiltering();
+for _, name in ipairs({"mat_forceaniso", "mat_filtertextures", "mat_mipmaptextures"}) do
+    cvars.AddChangeCallback(name, updateFiltering, "GarryscapeAtlasFiltering");
 end
-updateBlending()
-cvars.AddChangeCallback("garryscape_ground_blending",updateBlending,"GarryscapeGroundBlending")
+
+updateBlending();
+cvars.AddChangeCallback("garryscape_ground_blending", updateBlending, "GarryscapeGroundBlending");
