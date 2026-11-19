@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Encode the preview atlas and configure its glTF texture sources."""
-import hashlib
+from hashlib import file_digest
 import json
 from pathlib import Path
 import shutil
@@ -9,6 +9,11 @@ import sys
 from tempfile import TemporaryDirectory
 
 WEBP = "EXT_texture_webp"
+
+
+def sha256(path):
+    with path.open("rb") as stream:
+        return file_digest(stream, "sha256").hexdigest()
 
 
 def encode_preview(build, region, mode):
@@ -43,9 +48,9 @@ def encode_preview(build, region, mode):
 
     fingerprint = {
         "mode": mode,
-        "atlas": hashlib.sha256(source.read_bytes()).hexdigest(),
+        "atlas": sha256(source),
         "atlas_mtime_ns": source.stat().st_mtime_ns,
-        "encoder_script": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "encoder_script": sha256(Path(__file__)),
     }
     outputs = {image["uri"] for image in images}
     old_outputs = {f"{region}.png", f"{region}.webp"} - outputs
