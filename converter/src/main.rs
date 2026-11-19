@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Offline revision-530 terrain conversion and Source build preparation.
-// png 0.17 needs miniz_oxide 0.8; flate2 1.1 needs 0.9. Both are indirect
-// requirements with disjoint semver ranges, rather than duplicate direct deps.
+// png uses miniz_oxide 0.8 and enables flate2 defaults, which pull in 0.9.
+// flate2 selects zlib-rs when both Rust backends are enabled.
 #![allow(
     clippy::multiple_crate_versions,
     reason = "transitive png and flate2 version requirements"

@@ -17,7 +17,7 @@ pub(crate) fn png(baked: &RegionMesh) -> Result<Vec<u8>> {
         );
         enc.set_color(png::ColorType::Rgba);
         enc.set_depth(png::BitDepth::Eight);
-        enc.set_compression(png::Compression::Fast);
+        enc.set_compression(png::Compression::High);
         enc.write_header()?.write_image_data(&baked.pixels)?;
     }
     Ok(output)

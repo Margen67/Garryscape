@@ -256,7 +256,7 @@ mod tests {
         let decoder = png::Decoder::new(std::io::Cursor::new(&encoded));
         let mut reader = decoder.read_info().unwrap();
         assert_eq!((reader.info().width, reader.info().height), (2, 2));
-        let mut pixels = vec![0; reader.output_buffer_size()];
+        let mut pixels = vec![0; reader.output_buffer_size().unwrap()];
         let _consumed = reader.next_frame(&mut pixels).unwrap();
         assert_eq!(pixels, baked.pixels);
         let document: Value =

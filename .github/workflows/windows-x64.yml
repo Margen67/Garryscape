@@ -67,3 +67,12 @@ jobs:
           name: garryscape-convert-windows-x64
           path: converter/target/x86_64-pc-windows-msvc/release/garryscape-convert.exe
           if-no-files-found: error
+
+      - name: Install crate update checker
+        if: matrix.profile == 'dev'
+        run: cargo install cargo-outdated --locked
+
+      - name: Report available crate updates
+        if: matrix.profile == 'dev'
+        working-directory: converter
+        run: cargo outdated
