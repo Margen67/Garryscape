@@ -129,11 +129,12 @@ native image rectangles and CRCs so pixel preservation can be checked.
 Select the preview atlas with `--preview-texture both|oxipng|webp`.
 The default, `both`, includes lossless WebP and an optimized PNG fallback in
 one glTF. Use `oxipng` for PNG alone or `webp` to require WebP support in the
-glTF importer. The script requires Python 3.12.10 or newer and the selected encoders on
+glTF importer. The script requires Python 3.11 or newer and the selected encoders on
 `PATH` ([OxiPNG](https://github.com/oxipng/oxipng/releases) and
 [`cwebp`](https://developers.google.com/speed/webp/download)). It uses OxiPNG's
 maximum preset and WebP's maximum lossless preset with transparent RGB
-preservation. The Source VTF is produced separately.
+preservation. Python versions below 3.12.10 run with a warning. The Source VTF
+is produced separately.
 
 ## Required model shader: EGSM
 
