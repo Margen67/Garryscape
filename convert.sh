@@ -75,7 +75,7 @@ case "$PREVIEW_TEXTURE" in
     both|webp) command -v cwebp >/dev/null 2>&1 || fail 'Install the WebP tools and add cwebp to PATH.' ;;
 esac
 python_supported() {
-    "$@" -c 'import sys; sys.exit(sys.version_info[:3] < (3, 12, 14))' 2>/dev/null
+    "$@" -c 'import sys; sys.exit(sys.version_info[:3] < (3, 12, 10))' 2>/dev/null
 }
 if python_supported python3; then
     PYTHON=(python3)
@@ -84,7 +84,7 @@ elif python_supported python; then
 elif python_supported py -3; then
     PYTHON=(py -3)
 else
-    fail 'Python 3.12.14 or newer is required to configure the glTF preview.'
+    fail 'Python 3.12.10 or newer is required to configure the glTF preview.'
 fi
 command -v cargo >/dev/null 2>&1 || fail 'Nightly Rust/Cargo is required: https://rustup.rs'
 # Resolve the pinned nightly even when this script is called outside the repo.
