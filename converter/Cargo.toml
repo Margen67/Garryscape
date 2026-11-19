@@ -87,8 +87,8 @@ unused_qualifications = "warn"
 unused_results = "warn"
 variant_size_differences = "warn"
 
-# All public Clippy groups, including deliberately strict/contradictory rules.
-# Use warning levels so the complete diagnostic baseline remains visible.
+# Start with every public Clippy group; compatible checks remain enabled.
+# Exceptions below select one rule from conflicting style pairs.
 [lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
@@ -97,3 +97,38 @@ restriction = { level = "warn", priority = -1 }
 cargo = { level = "warn", priority = -1 }
 # Do not downgrade Clippy's default correctness errors when enabling `all`.
 correctness = { level = "deny", priority = 0 }
+
+# `unreachable_pub` is enabled above: it narrows exports of this binary to
+# `pub(crate)`. `redundant_pub_crate` would require removing that same scope.
+redundant_pub_crate = { level = "allow", priority = 1 }
+
+# Keep idiomatic tail expressions (`needless_return`) and `?` propagation
+# (`question_mark`); their restriction counterparts require the opposite style.
+implicit_return = { level = "allow", priority = 1 }
+question_mark_used = { level = "allow", priority = 1 }
+# Keep explicit, underscore-separated numeric suffixes and `pub(crate)`.
+# Each has an opposing restriction lint; enable only the readable spelling.
+separated_literal_suffix = { level = "allow", priority = 1 }
+pub_with_shorthand = { level = "allow", priority = 1 }
+# Keep semicolons inside blocks; `semicolon_outside_block` requests the opposite.
+semicolon_outside_block = { level = "allow", priority = 1 }
+# This project deliberately audits the entire restriction group, then makes
+# documented exceptions. This meta-lint would prohibit enabling that group.
+blanket_clippy_restriction_lints = { level = "allow", priority = 1 }
+# This std CLI does not link alloc directly. `std_instead_of_core` stays enabled
+# for types available through core; allocation types use the std facade.
+std_instead_of_alloc = { level = "allow", priority = 1 }
+# Choose modern foo.rs module files; mod_module_files enforces that convention.
+self_named_module_files = { level = "allow", priority = 1 }
+# Local allow blocks are the project's documented exception mechanism.
+# Requiring `expect` would contradict that policy; reasons remain mandatory.
+allow_attributes = { level = "allow", priority = 1 }
+# Alphabetizing native opcode tables and conversion stages obscures their
+# relationship to RT4. Keep declaration order aligned with the reference code.
+arbitrary_source_item_ordering = { level = "allow", priority = 1 }
+# Single-use helpers still separate protocol, validation and export concerns.
+# This check discourages useful decomposition without identifying a defect.
+single_call_fn = { level = "allow", priority = 1 }
+# Keep decimal algorithm constants recognizable against the RT4 reference.
+# decimal_bitwise_operands still checks that actual masks use hex notation.
+decimal_literal_representation = { level = "allow", priority = 1 }

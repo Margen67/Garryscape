@@ -43,8 +43,8 @@ jobs:
         run: cargo fmt --manifest-path converter/Cargo.toml --all -- --check
 
       - name: Run all enabled Clippy checks
-        # The existing warning baseline is advisory; correctness errors fail CI.
-        run: cargo clippy --locked --manifest-path converter/Cargo.toml --all-targets --target x86_64-pc-windows-msvc --message-format=short
+        # Compatible checks are strict; source-scoped exceptions document native math.
+        run: cargo clippy --locked --manifest-path converter/Cargo.toml --all-targets --target x86_64-pc-windows-msvc --message-format=short -- -D warnings
 
       - name: Run Rust tests
         run: cargo test --locked --manifest-path converter/Cargo.toml --all-targets --target x86_64-pc-windows-msvc --message-format=short

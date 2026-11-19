@@ -3,26 +3,74 @@ use crate::region::RegionMesh;
 use anyhow::Result;
 use serde_json::{json, Value};
 use std::{fs, path::Path};
+/// Align a binary glTF buffer to a four-byte boundary.
+#[allow(
+    clippy::min_ident_chars,
+    reason = "retain coordinate and channel notation shared with the native reference algorithm"
+)]
 fn pad(v: &mut Vec<u8>, byte: u8) {
     while !v.len().is_multiple_of(4) {
         v.push(byte);
     }
 }
+/// Append binary data and its buffer-view descriptor.
+#[allow(
+    clippy::indexing_slicing,
+    reason = "indices follow validated native tables and allocated image dimensions"
+)]
+#[allow(
+    clippy::min_ident_chars,
+    reason = "retain coordinate and channel notation shared with the native reference algorithm"
+)]
+#[allow(
+    clippy::shadow_reuse,
+    reason = "local rebinding records successive numeric representations"
+)]
+#[allow(
+    clippy::arithmetic_side_effects,
+    reason = "preserve native fixed-point truncation, bounded coordinate math and separate floating-point rounding"
+)]
 fn view(bin: &mut Vec<u8>, views: &mut Vec<Value>, data: &[u8], target: Option<u32>) -> usize {
     pad(bin, 0);
     let offset = bin.len();
     bin.extend_from_slice(data);
-    let mut v = json!({"buffer":0,"byteOffset":offset,"byteLength":data.len()});
+    let mut v = json!({"buffer":0_i32,"byteOffset":offset,"byteLength":data.len()});
     if let Some(target) = target {
         v["target"] = json!(target);
     }
     views.push(v);
     views.len() - 1
 }
+/// Encode float components as little-endian glTF bytes.
+#[allow(
+    clippy::little_endian_bytes,
+    reason = "the output file format specifies little-endian byte order"
+)]
 fn floats(values: impl IntoIterator<Item = f32>) -> Vec<u8> {
     values.into_iter().flat_map(f32::to_le_bytes).collect()
 }
-pub fn write(baked: &RegionMesh, png: &[u8], path: &Path, id: &str) -> Result<()> {
+/// Write the glTF preview, binary buffer and unmodified atlas PNG.
+#[allow(
+    clippy::too_many_lines,
+    reason = "keep native opcode dispatch and ordered conversion stages together"
+)]
+#[allow(
+    clippy::little_endian_bytes,
+    reason = "the output file format specifies little-endian byte order"
+)]
+#[allow(
+    clippy::min_ident_chars,
+    reason = "retain coordinate and channel notation shared with the native reference algorithm"
+)]
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::float_arithmetic,
+    clippy::suboptimal_flops,
+    reason = "preserve native fixed-point truncation, bounded coordinate math and separate floating-point rounding"
+)]
+pub(crate) fn write(baked: &RegionMesh, png: &[u8], path: &Path, id: &str) -> Result<()> {
     let mut bin = vec![];
     let mut views = vec![];
     let vertices = baked
@@ -68,7 +116,7 @@ pub fn write(baked: &RegionMesh, png: &[u8], path: &Path, id: &str) -> Result<()
                 .map(|v| {
                     [
                         (v.pos[0] * baked.mapping[0] + 4096.) / 128.,
-                        (v.pos[1] * baked.mapping[0] + 4096.) / 128. + t.layer as f32 * 128.,
+                        (v.pos[1] * baked.mapping[0] + 4096.) / 128. + f32::from(t.layer) * 128.,
                     ]
                 })
                 .into_iter()
@@ -87,12 +135,12 @@ pub fn write(baked: &RegionMesh, png: &[u8], path: &Path, id: &str) -> Result<()
         -baked.bounds[0][1] * 0.0254,
     ];
     let mut accessors = vec![
-        json!({"bufferView":position,"componentType":5126,"count":vertices.len(),"type":"VEC3","min":min,"max":max}),
-        json!({"bufferView":normal,"componentType":5126,"count":vertices.len(),"type":"VEC3"}),
-        json!({"bufferView":uv,"componentType":5126,"count":vertices.len(),"type":"VEC2"}),
+        json!({"bufferView":position,"componentType":5_126_i32,"count":vertices.len(),"type":"VEC3","min":min,"max":max}),
+        json!({"bufferView":normal,"componentType":5_126_i32,"count":vertices.len(),"type":"VEC3"}),
+        json!({"bufferView":uv,"componentType":5_126_i32,"count":vertices.len(),"type":"VEC2"}),
     ];
     accessors.push(
-        json!({"bufferView":terrain,"componentType":5126,"count":vertices.len(),"type":"VEC2"}),
+        json!({"bufferView":terrain,"componentType":5_126_i32,"count":vertices.len(),"type":"VEC2"}),
     );
     let mut primitives = vec![];
     let mut materials = vec![];
@@ -102,7 +150,7 @@ pub fn write(baked: &RegionMesh, png: &[u8], path: &Path, id: &str) -> Result<()
             .triangles
             .iter()
             .enumerate()
-            .filter(|(_, t)| t.material == material)
+            .filter(|&(_, t)| t.material == material)
             .flat_map(|(i, _)| [i as u32 * 3, i as u32 * 3 + 1, i as u32 * 3 + 2])
             .collect::<Vec<_>>();
         if indices.is_empty() {
@@ -115,22 +163,22 @@ pub fn write(baked: &RegionMesh, png: &[u8], path: &Path, id: &str) -> Result<()
         let index = view(&mut bin, &mut views, &data, Some(34963));
         let accessor = accessors.len();
         accessors.push(
-            json!({"bufferView":index,"componentType":5125,"count":indices.len(),"type":"SCALAR"}),
+            json!({"bufferView":index,"componentType":5_125_i32,"count":indices.len(),"type":"SCALAR"}),
         );
-        let pbr = if surface.texture >= 0 {
-            json!({"baseColorTexture":{"index":0},"baseColorFactor":surface.tint,"metallicFactor":0,"roughnessFactor":1})
+        let pbr = if surface.texture >= 0_i32 {
+            json!({"baseColorTexture":{"index":0_i32},"baseColorFactor":surface.tint,"metallicFactor":0_i32,"roughnessFactor":1_i32})
         } else {
-            json!({"baseColorFactor":surface.tint,"metallicFactor":0,"roughnessFactor":1})
+            json!({"baseColorFactor":surface.tint,"metallicFactor":0_i32,"roughnessFactor":1_i32})
         };
         materials.push(json!({"name":format!("{id}_{material}"),"pbrMetallicRoughness":pbr,"alphaMode":if water {"BLEND"}else{"OPAQUE"},"doubleSided":false,
             "extras":{"garryscapeAtlas":{"rect":surface.rect,"atlasWidth":baked.width,"atlasHeight":baked.height,"nativeTexture":surface.texture,"requiresAtlasWrap":true,"binding":material}}}));
-        primitives.push(json!({"attributes":{"POSITION":0,"NORMAL":1,"TEXCOORD_0":2,"TEXCOORD_1":3},"indices":accessor,"material":material,"mode":4}));
+        primitives.push(json!({"attributes":{"POSITION":0_i32,"NORMAL":1_i32,"TEXCOORD_0":2_i32,"TEXCOORD_1":3_i32},"indices":accessor,"material":material,"mode":4_i32}));
     }
     pad(&mut bin, 0);
     fs::create_dir_all(path)?;
     let buffer_name = format!("{id}.bin");
     let image_name = format!("{id}.png");
-    let document = json!({"asset":{"version":"2.0","generator":"Garryscape offline converter"},"scene":0,"scenes":[{"nodes":[0]}],"nodes":[{"name":"terrain","mesh":0}],"meshes":[{"name":"region","primitives":primitives}],"materials":materials,"textures":[{"sampler":0,"source":0}],"samplers":[{"magFilter":9729,"minFilter":9987,"wrapS":33071,"wrapT":33071}],"images":[{"uri":image_name}],"buffers":[{"uri":buffer_name,"byteLength":bin.len()}],"bufferViews":views,"accessors":accessors});
+    let document = json!({"asset":{"version":"2.0","generator":"Garryscape offline converter"},"scene":0_i32,"scenes":[{"nodes":[0_i32]}],"nodes":[{"name":"terrain","mesh":0_i32}],"meshes":[{"name":"region","primitives":primitives}],"materials":materials,"textures":[{"sampler":0_i32,"source":0_i32}],"samplers":[{"magFilter":9_729_i32,"minFilter":9_987_i32,"wrapS":33_071_i32,"wrapT":33_071_i32}],"images":[{"uri":image_name}],"buffers":[{"uri":buffer_name,"byteLength":bin.len()}],"bufferViews":views,"accessors":accessors});
     fs::write(path.join(&buffer_name), bin)?;
     // Write the original encoded atlas verbatim: no preview resize or recompression.
     fs::write(path.join(&image_name), png)?;
@@ -142,10 +190,19 @@ pub fn write(baked: &RegionMesh, png: &[u8], path: &Path, id: &str) -> Result<()
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::indexing_slicing,
+    clippy::unwrap_used,
+    reason = "test fixtures use exact values, fixed indexes and panic on unexpected failures"
+)]
 mod tests {
     use super::*;
     use crate::region::{Triangle, Vertex};
     #[test]
+    #[allow(
+        clippy::absolute_paths,
+        reason = "qualified names identify the format or IO operation directly"
+    )]
     fn external_texture_is_written_verbatim_at_original_dimensions() {
         let positions = [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]];
         let vertices = positions.map(|pos| Vertex {
@@ -173,7 +230,7 @@ mod tests {
                 scale: 128.,
             }],
             atlas_images: vec![],
-            blending: Default::default(),
+            blending: crate::blending::Blending::default(),
             mapping: [1., 4096., 0., 0.],
             underwater_triangles: 0,
             width: 2,
@@ -199,9 +256,9 @@ mod tests {
         let decoder = png::Decoder::new(std::io::Cursor::new(&encoded));
         let mut reader = decoder.read_info().unwrap();
         assert_eq!((reader.info().width, reader.info().height), (2, 2));
-        let mut decoded = vec![0; reader.output_buffer_size()];
-        reader.next_frame(&mut decoded).unwrap();
-        assert_eq!(decoded, baked.pixels);
+        let mut pixels = vec![0; reader.output_buffer_size()];
+        let _consumed = reader.next_frame(&mut pixels).unwrap();
+        assert_eq!(pixels, baked.pixels);
         let document: Value =
             serde_json::from_slice(&fs::read(directory.join("fixture.gltf")).unwrap()).unwrap();
         assert_eq!(document["images"][0]["uri"], "fixture.png");

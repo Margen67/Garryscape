@@ -224,7 +224,7 @@ collision is not implemented.
 ```bash
 cargo fmt --manifest-path converter/Cargo.toml --all -- --check
 cargo test --locked --manifest-path converter/Cargo.toml
-cargo clippy --locked --manifest-path converter/Cargo.toml --all-targets
+cargo clippy --locked --manifest-path converter/Cargo.toml --all-targets -- -D warnings
 bash -n convert.sh
 ./convert.sh regions 50 50 --cache /path/to/cache --preview-only
 python tests/validate_region.py output/2009scape/regions/50_50
@@ -235,7 +235,7 @@ python tests/test_hlsl.py     # optional native Microsoft HLSL compiler harness
 
 GitHub Actions runs these checks on **Windows x64 only** using the pinned
 nightly toolchain. Formatting differences and build/test/lint errors fail the
-workflow; the existing Clippy warning baseline remains advisory. Successful
+workflow, including every unsuppressed compiler and Clippy warning. Successful
 runs upload the release CLI as the **garryscape-convert-windows-x64** artifact.
 No RuneScape cache or compiled game assets are needed or uploaded by CI.
 
@@ -245,10 +245,20 @@ toolchain (Rust 1.102.0-nightly), plus every public Clippy group: `all`,
 Clippy correctness errors retain their severity. Clippy checks run with
 `cargo clippy`; ordinary builds run the compiler checks.
 
-The complete warning baseline is currently advisory and includes conflicting
-restriction rules. Add `-- -D warnings` to Clippy for a strict gate; the current
-baseline does not pass that gate. Rust has no universal `-Wall` group, so its
-explicit opt-in list needs updating when new compiler lints become available.
+Clippy passes with `-- -D warnings`, and CI enforces that gate. Conflicting
+style pairs select one convention, documented in `Cargo.toml`: for example,
+`unreachable_pub` stays enabled while `redundant_pub_crate` is disabled. Global
+exceptions are limited to conflicting rules and checks unsuitable for this CLI
+(such as requiring `alloc` imports in a std binary or forbidding single-use
+helpers). Native arithmetic, protocol endianness, validated table indexing,
+CLI output and exact equality use local `#[allow(..., reason = "...")]`
+attributes on the relevant items. Tests scope their fixture/unwrap exceptions
+to test modules. The crate also documents the incompatible transitive
+`miniz_oxide` requirements of png and flate2 and the nightly lint feature gates.
+No blanket `allow(warnings)` or Clippy group suppression is used.
+
+Rust has no universal `-Wall` group, so the explicit opt-in list needs updating
+when new compiler lints become available.
 Nightly-only lint feature gates are enabled explicitly in the converter crate;
 no `RUSTC_BOOTSTRAP` override is used. Run Cargo commands from the repository
 root or its `converter` directory to select the pinned toolchain automatically.

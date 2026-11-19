@@ -1,40 +1,53 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Lossless RGBA8888 VTF 7.2. Full mip chain, generated once offline.
 use crate::region::RegionMesh;
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use std::{
     fs::File,
-    io::{BufWriter, Write},
+    io::{BufWriter, Write as _},
     path::Path,
 };
-pub fn write(baked: &RegionMesh, path: &Path) -> Result<()> {
+/// Write an RGBA8888 VTF with a complete alpha-aware mip chain.
+#[allow(
+    clippy::little_endian_bytes,
+    reason = "the output file format specifies little-endian byte order"
+)]
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::integer_division,
+    clippy::integer_division_remainder_used,
+    reason = "preserve native fixed-point truncation, bounded coordinate math and separate floating-point rounding"
+)]
+pub(crate) fn write(baked: &RegionMesh, path: &Path) -> Result<()> {
     let mut levels = vec![];
     let (mut width, mut height) = (baked.width, baked.height);
-    let mut previous = &baked.pixels[..];
+    let mut previous = &*baked.pixels;
     while width > 1 || height > 1 {
         let next = downsample(previous, width, height);
         levels.push(next);
         width = (width / 2).max(1);
         height = (height / 2).max(1);
-        previous = levels.last().unwrap();
+        previous = levels.last().context("Missing generated mip level")?;
     }
-    let mut header = [0u8; 80];
+    let mut header = [0_u8; 80];
     header[..4].copy_from_slice(b"VTF\0");
-    header[4..8].copy_from_slice(&7u32.to_le_bytes());
-    header[8..12].copy_from_slice(&2u32.to_le_bytes());
-    header[12..16].copy_from_slice(&80u32.to_le_bytes());
+    header[4..8].copy_from_slice(&7_u32.to_le_bytes());
+    header[8..12].copy_from_slice(&2_u32.to_le_bytes());
+    header[12..16].copy_from_slice(&80_u32.to_le_bytes());
     header[16..18].copy_from_slice(&(baked.width as u16).to_le_bytes());
     header[18..20].copy_from_slice(&(baked.height as u16).to_le_bytes());
     // Control bytes share the albedo atlas. Texture-detail/picmip reduction
     // would destroy them; NOLOD protects the base level without disabling mips.
     let no_lod = if baked.blending.rect[2] > 0 { 0x200 } else { 0 };
-    header[20..24].copy_from_slice(&(0x2000u32 | 8 | 4 | 2 | no_lod).to_le_bytes());
-    header[24..26].copy_from_slice(&1u16.to_le_bytes());
-    header[48..52].copy_from_slice(&1f32.to_le_bytes());
-    header[52..56].copy_from_slice(&0u32.to_le_bytes());
+    header[20..24].copy_from_slice(&(0x2000_u32 | 8 | 4 | 2 | no_lod).to_le_bytes());
+    header[24..26].copy_from_slice(&1_u16.to_le_bytes());
+    header[48..52].copy_from_slice(&1_f32.to_le_bytes());
+    header[52..56].copy_from_slice(&0_u32.to_le_bytes());
     header[56] = (levels.len() + 1) as u8;
     header[57..61].copy_from_slice(&u32::MAX.to_le_bytes());
-    header[63..65].copy_from_slice(&1u16.to_le_bytes());
+    header[63..65].copy_from_slice(&1_u16.to_le_bytes());
     let mut output = BufWriter::new(File::create(path)?);
     output.write_all(&header)?;
     for level in levels.iter().rev() {
@@ -44,11 +57,34 @@ pub fn write(baked: &RegionMesh, path: &Path) -> Result<()> {
     output.flush()?;
     Ok(())
 }
+/// Generate the next VTF mip without resizing the base image.
+#[allow(
+    clippy::indexing_slicing,
+    reason = "indices follow validated native tables and allocated image dimensions"
+)]
+#[allow(
+    clippy::min_ident_chars,
+    reason = "retain coordinate and channel notation shared with the native reference algorithm"
+)]
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::float_arithmetic,
+    clippy::integer_division,
+    clippy::integer_division_remainder_used,
+    clippy::suboptimal_flops,
+    reason = "preserve native fixed-point truncation, bounded coordinate math and separate floating-point rounding"
+)]
 fn downsample(input: &[u8], width: usize, height: usize) -> Vec<u8> {
     let next_width = (width / 2).max(1);
     let next_height = (height / 2).max(1);
     let mut output = vec![0; next_width * next_height * 4];
-    let linear: Vec<f32> = (0..256).map(|v| (v as f32 / 255.).powf(2.2)).collect();
+    let linear: Vec<f32> = (0_i32..256_i32)
+        .map(|v| (v as f32 / 255.).powf(2.2))
+        .collect();
     for y in 0..next_height {
         for x in 0..next_width {
             let mut rgb = [0.; 3];
@@ -58,7 +94,7 @@ fn downsample(input: &[u8], width: usize, height: usize) -> Vec<u8> {
                     let sx = (x * 2 + dx).min(width - 1);
                     let sy = (y * 2 + dy).min(height - 1);
                     let i = (sy * width + sx) * 4;
-                    let a = input[i + 3] as f32 / 255.;
+                    let a = f32::from(input[i + 3]) / 255.;
                     alpha += a;
                     for c in 0..3 {
                         rgb[c] += linear[input[i + c] as usize] * a;
@@ -82,10 +118,19 @@ fn downsample(input: &[u8], width: usize, height: usize) -> Vec<u8> {
 mod tests {
     use super::*;
     #[test]
+    #[allow(
+        clippy::min_ident_chars,
+        reason = "retain coordinate and channel notation shared with the native reference algorithm"
+    )]
+    #[allow(
+        clippy::integer_division,
+        clippy::integer_division_remainder_used,
+        reason = "preserve native fixed-point truncation, bounded coordinate math and separate floating-point rounding"
+    )]
     fn rectangular_mips_keep_the_last_row_or_column_until_one_by_one() {
         for (width, height) in [(8, 2), (2, 8), (1, 8), (8, 1)] {
-            let mut pixels = vec![0u8; width * height * 4];
-            for p in pixels.chunks_exact_mut(4) {
+            let mut pixels = vec![0_u8; width * height * 4];
+            for p in pixels.as_chunks_mut::<4>().0 {
                 p.copy_from_slice(&[12, 34, 56, 255]);
             }
             let (mut w, mut h) = (width, height);
@@ -94,7 +139,11 @@ mod tests {
                 w = (w / 2).max(1);
                 h = (h / 2).max(1);
                 assert_eq!(pixels.len(), w * h * 4);
-                assert!(pixels.chunks_exact(4).all(|p| p == [12, 34, 56, 255]));
+                assert!(pixels
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .all(|p| *p == [12, 34, 56, 255]));
             }
         }
     }

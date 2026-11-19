@@ -6,30 +6,62 @@ use crate::{
     terrain::{self, World},
     textures::Textures,
 };
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{bail, ensure, Context as _, Result};
 use std::collections::BTreeMap;
+/// Native overlay or underlay material definition.
 #[derive(Clone, Debug)]
-pub struct Floor {
+pub(crate) struct Floor {
+    /// Packed 24-bit native floor color.
     pub rgb: u32,
+    /// Procedural texture ID, or -1 for an untextured floor.
     pub texture: i32,
+    /// Native texture repeat scale.
     pub scale: f32,
+    /// Whether the overlay requests interpolation into adjacent tiles.
     pub blend: bool,
+    /// Native floor blend ordering priority.
     pub priority: u8,
+    /// Packed native underwater fog color.
     pub water_color: u32,
 }
 impl Floor {
-    pub fn tint(&self, texture: Option<&crate::textures::Texture>) -> [f32; 4] {
+    /// Calculate the native floor multiplier from texture brightness metadata.
+    #[allow(
+        clippy::indexing_slicing,
+        reason = "indices follow validated native tables and allocated image dimensions"
+    )]
+    #[allow(
+        clippy::absolute_paths,
+        reason = "qualified names identify the format or IO operation directly"
+    )]
+    #[allow(
+        clippy::min_ident_chars,
+        reason = "retain coordinate and channel notation shared with the native reference algorithm"
+    )]
+    #[allow(
+        clippy::as_conversions,
+        clippy::cast_precision_loss,
+        clippy::float_arithmetic,
+        clippy::suboptimal_flops,
+        reason = "preserve native fixed-point truncation, bounded coordinate math and separate floating-point rounding"
+    )]
+    pub(crate) fn tint(&self, texture: Option<&crate::textures::Texture>) -> [f32; 4] {
         let mut tint = [1.; 4];
-        for (c, shift) in [(0, 16), (1, 8), (2, 0)] {
-            let base = (self.rgb >> shift & 255) as f32;
-            let brightness = texture.map_or(0., |t| t.brightness as f32);
-            let boost = texture.map_or(0., |t| t.boost as f32);
+        for (c, shift) in [(0, 16_i32), (1, 8_i32), (2, 0_i32)] {
+            let base = ((self.rgb >> shift) & 255) as f32;
+            let brightness = texture.map_or(0., |t| f32::from(t.brightness));
+            let boost = texture.map_or(0., |t| f32::from(t.boost));
             tint[c] = (base * (256. - brightness) + 255. * brightness) / 256. / 255.
                 * (256. + boost)
                 / 256.;
         }
         tint
     }
+    /// Decode an overlay or underlay floor definition.
+    #[allow(
+        clippy::min_ident_chars,
+        reason = "retain coordinate and channel notation shared with the native reference algorithm"
+    )]
     fn decode(data: &[u8], overlay: bool) -> Result<Self> {
         let mut r = Reader::new(data);
         let mut f = Self {
@@ -38,7 +70,7 @@ impl Floor {
             scale: 128.,
             blend: false,
             priority: 8,
-            water_color: 1190717,
+            water_color: 1_190_717,
         };
         loop {
             let op = r.u8()?;
@@ -47,16 +79,16 @@ impl Floor {
                 (_, 1) => f.rgb = r.u24()?,
                 (false, 2) | (true, 3) => {
                     let id = r.u16()?;
-                    f.texture = if id == 65535 { -1 } else { id as i32 };
+                    f.texture = if id == 65535 { -1_i32 } else { i32::from(id) };
                 }
-                (false, 3) | (true, 9) => f.scale = r.u16()? as f32,
-                (true, 2) => f.texture = r.u8()? as i32,
-                (false, 4) | (true, 5) | (true, 8) | (true, 10) => {}
+                (false, 3) | (true, 9) => f.scale = f32::from(r.u16()?),
+                (true, 2) => f.texture = i32::from(r.u8()?),
+                (false, 4) | (true, 5 | 8 | 10) => {}
                 (true, 7) => {
-                    r.u24()?;
+                    let _consumed = r.u24()?;
                 }
                 (true, 14) => {
-                    r.u8()?;
+                    let _consumed = r.u8()?;
                 }
                 (true, 11) => f.priority = r.u8()?,
                 (true, 13) => f.water_color = r.u24()?,
@@ -72,57 +104,117 @@ impl Floor {
         Ok(f)
     }
 }
+/// One terrain vertex with position, normal and native UV coordinates.
 #[derive(Clone, Copy, Debug)]
-pub struct Vertex {
+pub(crate) struct Vertex {
+    /// Scaled Source-space position.
     pub pos: [f32; 3],
+    /// Unit surface normal.
     pub normal: [f32; 3],
+    /// Native independently repeating texture coordinates.
     pub uv: [f32; 2],
 }
+/// One native terrain triangle and its material/control bindings.
 #[derive(Clone, Debug)]
-pub struct Triangle {
+pub(crate) struct Triangle {
+    /// Original triangle vertices in export winding order.
     pub vertices: [Vertex; 3],
+    /// Whether this surface uses the water shader.
     pub water: bool,
+    /// Index into the exported material definitions.
     pub material: usize,
+    /// Whether this triangle belongs to the underwater map group.
     pub underwater: bool,
+    /// Surface plane or underwater plane identifier.
     pub layer: u8,
+    /// Tile address in the packed interpolation control grid.
     pub blend_address: u32,
 }
+/// Shader parameters for one native terrain material.
 #[derive(Clone, serde::Serialize)]
-pub struct Surface {
+pub(crate) struct Surface {
+    /// Packed texture rectangle: x, y, width and height.
     pub rect: [usize; 4],
+    /// Native RGBA multiplier derived from floor and texture metadata.
     pub tint: [f32; 4],
+    /// Procedural texture ID, or -1 for an untextured floor.
     pub texture: i32,
+    /// Whether this surface uses the water shader.
     pub water: bool,
+    /// Native texture repeat scale.
     pub scale: f32,
 }
+/// An exact-copy atlas image shared by matching source textures.
 #[derive(serde::Serialize)]
-pub struct AtlasImage {
+pub(crate) struct AtlasImage {
+    /// Cache IDs whose pixel data and dimensions are identical.
     pub source_ids: Vec<i32>,
+    /// Packed texture rectangle: x, y, width and height.
     pub rect: [usize; 4],
+    /// CRC32 of the unmodified native RGBA image.
     pub crc: u32,
 }
-pub struct RegionMesh {
+/// Complete terrain geometry, native texture atlas and export metadata.
+#[allow(
+    clippy::absolute_paths,
+    reason = "qualified names identify the format or IO operation directly"
+)]
+pub(crate) struct RegionMesh {
+    /// Native terrain triangles, including underwater terrain.
     pub triangles: Vec<Triangle>,
+    /// Packed atlas bytes in RGBA order.
     pub pixels: Vec<u8>,
+    /// Atlas width after power-of-two cropping of unused space.
     pub width: usize,
+    /// Atlas height after power-of-two cropping of unused space.
     pub height: usize,
+    /// Number of source texture images requested by the region.
     pub tiles: usize,
+    /// Number of distinct native images after exact deduplication.
     pub unique_tiles: usize,
+    /// Minimum and maximum Source-space positions.
     pub bounds: [[f32; 3]; 2],
+    /// Triangle counts for the four surface planes.
     pub plane_triangles: [usize; 4],
+    /// Number of triangles decoded from underwater terrain.
     pub underwater_triangles: usize,
+    /// Native terrain materials indexing the shared atlas.
     pub materials: Vec<Surface>,
+    /// Native image rectangles and deduplication provenance.
     pub atlas_images: Vec<AtlasImage>,
+    /// Offline RT4 interpolation plans and control image.
     pub blending: crate::blending::Blending,
+    /// World-to-tile mapping parameters consumed by the atlas shader.
     pub mapping: [f32; 4],
 }
-/// Deduplicate ONLY exact native images, retaining dimensions and every RGBA byte.
+/// Packed RGBA pixels, atlas dimensions, image metadata and source-ID rectangles.
+#[allow(
+    unmarked_unchecked_type_aliases,
+    reason = "concrete alias has no generic bounds"
+)]
 type PackedAtlas = (
     Vec<u8>,
     [usize; 2],
     Vec<AtlasImage>,
     BTreeMap<i32, [usize; 4]>,
 );
+/// Deduplicate and pack native images without resizing or padding.
+#[allow(
+    clippy::indexing_slicing,
+    reason = "indices follow validated native tables and allocated image dimensions"
+)]
+#[allow(
+    clippy::absolute_paths,
+    reason = "qualified names identify the format or IO operation directly"
+)]
+#[allow(
+    clippy::min_ident_chars,
+    reason = "retain coordinate and channel notation shared with the native reference algorithm"
+)]
+#[allow(
+    clippy::arithmetic_side_effects,
+    reason = "preserve native fixed-point truncation, bounded coordinate math and separate floating-point rounding"
+)]
 fn pack(textures: &Textures) -> Result<PackedAtlas> {
     let mut unique: Vec<(&crate::textures::Texture, Vec<i32>)> = vec![];
     for (&id, image) in &textures.images {
@@ -130,9 +222,9 @@ fn pack(textures: &Textures) -> Result<PackedAtlas> {
             image.pixels.len() == image.size * image.size,
             "Invalid native texture dimensions"
         );
-        if let Some((_, ids)) = unique
+        if let Some(&mut (_, ref mut ids)) = unique
             .iter_mut()
-            .find(|(other, _)| other.size == image.size && other.pixels == image.pixels)
+            .find(|&&mut (other, _)| other.size == image.size && other.pixels == image.pixels)
         {
             ids.push(id);
         } else {
@@ -140,13 +232,13 @@ fn pack(textures: &Textures) -> Result<PackedAtlas> {
         }
     }
     // Power-of-two native images pack on shelves, without gutters or extrusion.
-    unique.sort_by_key(|(t, _)| std::cmp::Reverse(t.size));
-    let mut side = 128usize;
+    unique.sort_by_key(|&(t, _)| core::cmp::Reverse(t.size));
+    let mut side = 128_usize;
     let placements = loop {
         let (mut x, mut y, mut row) = (0, 0, 0);
         let mut placements = vec![];
         let mut fits = true;
-        for (image, _) in &unique {
+        for &(image, _) in &unique {
             if x + image.size > side {
                 x = 0;
                 y += row;
@@ -185,7 +277,7 @@ fn pack(textures: &Textures) -> Result<PackedAtlas> {
         .unwrap_or(2)
         .max(2)
         .next_power_of_two();
-    let mut pixels = vec![0u8; width * height * 4];
+    let mut pixels = vec![0_u8; width * height * 4];
     let mut images = vec![];
     let mut ids = BTreeMap::new();
     for ((image, source_ids), rect) in unique.into_iter().zip(placements) {
@@ -196,7 +288,7 @@ fn pack(textures: &Textures) -> Result<PackedAtlas> {
             }
         }
         for id in &source_ids {
-            ids.insert(*id, rect);
+            let _previous = ids.insert(*id, rect);
         }
         let bytes = image.pixels.iter().flatten().copied().collect::<Vec<_>>();
         images.push(AtlasImage {
@@ -207,7 +299,50 @@ fn pack(textures: &Textures) -> Result<PackedAtlas> {
     }
     Ok((pixels, [width, height], images, ids))
 }
-pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh> {
+/// Convert one region to native triangles and a shared texture atlas.
+#[allow(
+    clippy::cognitive_complexity,
+    reason = "mirror native shape and opcode dispatch without changing its evaluation"
+)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "keep native opcode dispatch and ordered conversion stages together"
+)]
+#[allow(
+    clippy::indexing_slicing,
+    reason = "indices follow validated native tables and allocated image dimensions"
+)]
+#[allow(
+    clippy::float_cmp,
+    reason = "exact native vertex and material identity; approximate equality would merge distinct data"
+)]
+#[allow(
+    clippy::print_stderr,
+    reason = "the CLI reports errors and decoding progress to stderr"
+)]
+#[allow(
+    clippy::min_ident_chars,
+    reason = "retain coordinate and channel notation shared with the native reference algorithm"
+)]
+#[allow(
+    clippy::absolute_paths,
+    reason = "qualified names identify the format or IO operation directly"
+)]
+#[allow(
+    clippy::shadow_unrelated,
+    reason = "each loop or conversion stage scopes its own intermediate values"
+)]
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::float_arithmetic,
+    clippy::suboptimal_flops,
+    reason = "preserve native fixed-point truncation, bounded coordinate math and separate floating-point rounding"
+)]
+pub(crate) fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh> {
     let under = cache
         .group(2, 1)?
         .into_iter()
@@ -223,8 +358,8 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh>
     for layer in 0..5 {
         let uw = layer == 4;
         let p = if uw { 0 } else { layer };
-        for x in 0..64 {
-            for y in 0..64 {
+        for x in 0_i32..64_i32 {
+            for y in 0_i32..64_i32 {
                 let tile = if uw {
                     let Some(t) = world.underwater_tile(x, y) else {
                         continue;
@@ -238,8 +373,8 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh>
                         let f = (if overlay { &over } else { &under })
                             .get(&id)
                             .context("Missing floor definition")?;
-                        if f.texture >= 0 {
-                            needed.insert(f.texture);
+                        if f.texture >= 0_i32 {
+                            let _consumed = needed.insert(f.texture);
                         }
                     }
                 }
@@ -248,8 +383,8 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh>
     }
     let mut blending = crate::blending::Blending::build(world, &under, &over);
     for floor in blending.floors.values() {
-        if floor.texture >= 0 {
-            needed.insert(floor.texture);
+        if floor.texture >= 0_i32 {
+            let _consumed = needed.insert(floor.texture);
         }
     }
     for &id in &needed {
@@ -286,8 +421,8 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh>
     for layer in 0..5 {
         let uw = layer == 4;
         let p = if uw { 0 } else { layer };
-        for x in 0..64 {
-            for y in 0..64 {
+        for x in 0_i32..64_i32 {
+            for y in 0_i32..64_i32 {
                 let tile = if uw {
                     let Some(t) = world.underwater_tile(x, y) else {
                         continue;
@@ -310,7 +445,12 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh>
                     .iter()
                     .map(|&c| terrain::vertex(c, tile.rotation))
                     .collect::<Vec<_>>();
-                let corners = [(x, y), (x + 1, y), (x + 1, y + 1), (x, y + 1)];
+                let corners = [
+                    (x, y),
+                    (x + 1_i32, y),
+                    (x + 1_i32, y + 1_i32),
+                    (x, y + 1_i32),
+                ];
                 let heights = corners.map(|(x, y)| world.layer_tile(uw, p, x, y).height);
                 let surface_heights = corners.map(|(x, y)| world.tile(0, x, y).height);
                 let normals = corners.map(|(x, y)| world.layer_normal(uw, p, x, y));
@@ -323,7 +463,7 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh>
                     let floor = (if overlay { &over } else { &under })
                         .get(&id)
                         .context("Missing face floor")?;
-                    if floor.rgb == 0xff00ff && floor.texture < 0 {
+                    if floor.rgb == 0x00ff_00ff && floor.texture < 0_i32 {
                         continue;
                     }
                     let texture = textures.images.get(&floor.texture);
@@ -336,23 +476,24 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh>
                         water,
                         scale: floor.scale,
                     };
-                    let material = if let Some(i) = materials.iter().position(|m| {
-                        m.rect == surface.rect
-                            && m.tint == surface.tint
-                            && m.water == water
-                            && m.scale == surface.scale
-                    }) {
-                        i
-                    } else {
-                        let i = materials.len();
-                        materials.push(surface);
-                        i
-                    };
+                    let material = materials
+                        .iter()
+                        .position(|m| {
+                            m.rect == surface.rect
+                                && m.tint == surface.tint
+                                && m.water == water
+                                && m.scale == surface.scale
+                        })
+                        .unwrap_or_else(|| {
+                            let i = materials.len();
+                            materials.push(surface);
+                            i
+                        });
                     ensure!(
                         material < 64,
                         "Atlas shader supports at most 64 native material bindings"
                     );
-                    let vertices = std::array::from_fn(|i| {
+                    let vertices = core::array::from_fn(|i| {
                         let index = f[i + 1];
                         let (xy, w) = points[if index < 4 {
                             (index + 4 - tile.rotation as usize) & 3
@@ -375,7 +516,7 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh>
                             (y as f32 + xy[1] - 32.) * 128. * unit,
                             z * unit,
                         ];
-                        let normal = terrain::normalize(std::array::from_fn(|c| {
+                        let normal = terrain::normalize(core::array::from_fn(|c| {
                             (0..4).map(|j| normals[j][c] * w[j]).sum()
                         }));
                         // Preserve the client's world-space UV frequency AND phase. Only
@@ -406,7 +547,7 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh>
                         layer: layer as u8,
                         blend_address: {
                             let a = controls[(layer * 64 + x as usize) * 64 + y as usize];
-                            a[0] as u32 + (a[1] as u32) * 256 + (a[2] as u32) * 65536
+                            u32::from(a[0]) + u32::from(a[1]) * 256 + u32::from(a[2]) * 65536
                         },
                     });
                     if uw {
@@ -442,27 +583,41 @@ pub fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<RegionMesh>
     })
 }
 #[cfg(test)]
+#[allow(
+    clippy::indexing_slicing,
+    clippy::modulo_arithmetic,
+    clippy::unwrap_used,
+    reason = "test fixtures use exact values, fixed indexes and panic on unexpected failures"
+)]
 mod tests {
     use super::*;
     #[test]
+    #[allow(
+        clippy::as_conversions,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::integer_division,
+        clippy::integer_division_remainder_used,
+        reason = "preserve native fixed-point truncation, bounded coordinate math and separate floating-point rounding"
+    )]
     fn atlas_deduplicates_exact_images_without_padding_or_resizing() {
-        let original = (0..128 * 128)
-            .map(|i| [(i % 128) as u8, (i / 128) as u8, 42, 255])
+        let original = (0_i32..128_i32 * 128_i32)
+            .map(|i| [(i % 128_i32) as u8, (i / 128_i32) as u8, 42, 255])
             .collect::<Vec<_>>();
         let small = vec![[11, 22, 33, 44]; 64 * 64];
         let textures = Textures::fixture(BTreeMap::from([
-            (1, (128, original.clone())),
-            (2, (128, original.clone())),
-            (3, (64, small.clone())),
+            (1_i32, (128, original.clone())),
+            (2_i32, (128, original.clone())),
+            (3_i32, (64, small.clone())),
         ]));
         let (pixels, [width, height], images, ids) = pack(&textures).unwrap();
         assert_eq!((width, height), (256, 128));
         assert_eq!(pixels.len(), width * height * 4);
         assert_eq!(images.len(), 2);
-        assert_eq!(ids[&1], ids[&2]);
-        assert_eq!(ids[&1][2..], [128, 128]);
-        assert_eq!(ids[&3][2..], [64, 64]);
-        for (id, size, expected) in [(1, 128, &original), (3, 64, &small)] {
+        assert_eq!(ids[&1_i32], ids[&2_i32]);
+        assert_eq!(ids[&1_i32][2..], [128, 128]);
+        assert_eq!(ids[&3_i32][2..], [64, 64]);
+        for (id, size, expected) in [(1_i32, 128, &original), (3_i32, 64, &small)] {
             let rect = ids[&id];
             for y in 0..size {
                 for x in 0..size {
@@ -471,18 +626,24 @@ mod tests {
                 }
             }
         }
-        assert_eq!(ids[&3][0], ids[&1][0] + 128); // directly adjacent, no gutter
+        assert_eq!(ids[&3_i32][0], ids[&1_i32][0] + 128); // directly adjacent, no gutter
     }
     #[test]
+    #[allow(
+        clippy::as_conversions,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "preserve native fixed-point truncation, bounded coordinate math and separate floating-point rounding"
+    )]
     fn crop_dimensions_follow_occupied_rectangles_for_small_and_large_atlases() {
         for (count, size, expected) in [
-            (1, 2, [2, 2]),
-            (2, 2, [4, 2]),
-            (19, 128, [1024, 512]),
-            (65, 128, [2048, 1024]),
+            (1_i32, 2, [2, 2]),
+            (2_i32, 2, [4, 2]),
+            (19_i32, 128, [1024, 512]),
+            (65_i32, 128, [2048, 1024]),
         ] {
             let textures = Textures::fixture(
-                (0..count)
+                (0_i32..count)
                     .map(|id| {
                         // Transparent images are still retained: crop only free space,
                         // not pixels inside a source image's repeating UV domain.
@@ -501,8 +662,12 @@ mod tests {
         }
     }
     #[test]
+    #[allow(
+        clippy::min_ident_chars,
+        reason = "retain coordinate and channel notation shared with the native reference algorithm"
+    )]
     fn unsigned_overlay_id() {
         let f = Floor::decode(&[1, 0x60, 0x60, 0x58, 3, 1, 45, 0], true).unwrap();
-        assert_eq!(f.texture, 301);
+        assert_eq!(f.texture, 301_i32);
     }
 }
