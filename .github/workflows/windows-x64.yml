@@ -60,12 +60,18 @@ jobs:
       - name: Build converter
         run: cargo build --locked --profile ${{ matrix.profile }} --manifest-path converter/Cargo.toml --target x86_64-pc-windows-msvc --message-format=short
 
-      - name: Upload Windows x64 converter
+      - name: Package Windows x64 converter
+        if: matrix.profile == 'release'
+        working-directory: converter/target/x86_64-pc-windows-msvc/release
+        run: |-
+          & "$env:ProgramFiles/7-Zip/7z.exe" a -t7z -mx9 -bb3 garryscape-convert-windows-x64.7z garryscape-convert.exe
+
+      - name: Upload Windows x64 converter archive
         if: matrix.profile == 'release'
         uses: actions/upload-artifact@main
         with:
-          name: garryscape-convert-windows-x64
-          path: converter/target/x86_64-pc-windows-msvc/release/garryscape-convert.exe
+          path: converter/target/x86_64-pc-windows-msvc/release/garryscape-convert-windows-x64.7z
+          archive: false
           if-no-files-found: error
 
       - name: Install crate update checker

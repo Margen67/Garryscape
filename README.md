@@ -249,7 +249,7 @@ nightly toolchain, with a matrix for debug (`dev`) and optimized (`release`)
 profiles. Both profiles run Clippy, tests and builds. Formatting differences and
 build/test/lint errors fail the workflow, including every unsuppressed compiler
 and Clippy warning. Only the release build uploads the CLI as the
-**garryscape-convert-windows-x64** artifact. `convert.sh` also builds and runs
+**garryscape-convert-windows-x64.7z** artifact. `convert.sh` also builds and runs
 the optimized release converter.
 No RuneScape cache or compiled game assets are needed or uploaded by CI.
 
