@@ -63,7 +63,16 @@ if [[ -f $STUDIOMDL ]]; then STUDIOMDL="$(cd -- "$(dirname -- "$STUDIOMDL")" && 
 if (( ! PREVIEW )); then [[ -f $STUDIOMDL ]] || fail "StudioMDL not found: $STUDIOMDL (use --preview-only to export without it)"; fi
 command -v cargo >/dev/null 2>&1 || fail 'Nightly Rust/Cargo is required: https://rustup.rs'
 # Resolve the pinned nightly even when this script is called outside the repo.
-(cd -- "$ROOT" && cargo build --locked --release --manifest-path "$ROOT/converter/Cargo.toml")
+(
+    cd -- "$ROOT"
+    if [[ ${CARGO_ENCODED_RUSTFLAGS+x} ]]; then
+        # Cargo separates encoded arguments with ASCII unit separators.
+        export CARGO_ENCODED_RUSTFLAGS="${CARGO_ENCODED_RUSTFLAGS:+${CARGO_ENCODED_RUSTFLAGS}$'\x1f'}-Ctarget-cpu=native"
+    else
+        export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-Ctarget-cpu=native"
+    fi
+    cargo build --locked --release --manifest-path "$ROOT/converter/Cargo.toml"
+)
 CLI="$ROOT/converter/target/release/garryscape-convert"
 [[ ! -f $CLI.exe ]] || CLI=$CLI.exe
 "$CLI" regions "$RX" "$RY" --cache "$(native_path "$CACHE")" --scale "$SCALE" --name "$NAME" --output "$(native_path "$OUTPUT")" "${REBUILD[@]}"
