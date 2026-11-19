@@ -63,7 +63,7 @@ jobs:
       - name: Package Windows x64 converter
         if: matrix.profile == 'release'
         working-directory: converter/target/x86_64-pc-windows-msvc/release
-        run: 7z a -t7z -mx9 -bb3 garryscape-convert-windows-x64.7z garryscape-convert.exe
+        run: 7z a -mx9 -bb3 garryscape-convert-windows-x64.7z garryscape-convert.exe
 
       - name: Upload Windows x64 converter archive
         if: matrix.profile == 'release'
