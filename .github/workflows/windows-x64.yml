@@ -55,7 +55,13 @@ jobs:
         run: |-
           $glualintDir = Join-Path $env:RUNNER_TEMP 'glualint'
           $archive = "$glualintDir.zip"
-          Invoke-WebRequest -Uri 'https://github.com/FPtje/GLuaFixer/releases/download/1.30.0/glualint-1.30.0-x86_64-windows.zip' -OutFile $archive
+          $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/FPtje/GLuaFixer/releases/latest'
+          $asset = $release.assets | Where-Object { $_.name -like 'glualint-*-x86_64-windows.zip' }
+          if (@($asset).Count -ne 1) {
+            throw "Expected one Windows x64 archive in GLuaFixer release $($release.tag_name)."
+          }
+          Write-Host "Using GLuaFixer $($release.tag_name)"
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $archive
           Expand-Archive -Path $archive -DestinationPath $glualintDir
           & (Join-Path $glualintDir 'glualint.exe') lint addons tests
 
