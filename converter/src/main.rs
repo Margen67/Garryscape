@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-or-later
 //! Offline revision-530 terrain conversion and Source build preparation.
 // png uses miniz_oxide 0.8 and enables flate2 defaults, which pull in 0.9.
 // flate2 selects zlib-rs when both Rust backends are enabled.

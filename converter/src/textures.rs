@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-or-later
 //! Offline revision-530 procedural textures. Fixed-point operations adapted from
 //! rs-map-viewer (BSD-2-Clause; see third_party/rs-map-viewer-LICENSE).
 use crate::{binary::Reader, cache::Cache};

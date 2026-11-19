@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-or-later
 pub(crate) mod dmx;
 /// Folder-based glTF preview serialization.
 pub(crate) mod gltf;

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Encode the preview atlas and configure its glTF texture sources."""
 from hashlib import file_digest
 import json

@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: AGPL-3.0-only
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- EGSM must be installed in the menu realm before client materials load.
 if not EGSM or not shaderlib then
     if game.GetMap():lower() == "garryscape" then

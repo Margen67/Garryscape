@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-or-later
 //! Lossless RGBA8888 VTF 7.2. Full mip chain, generated once offline.
 use crate::region::RegionMesh;
 use anyhow::{Context as _, Result};

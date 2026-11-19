@@ -311,6 +311,6 @@ compilation; actual GPU rendering still requires an in-game check.
 ## License
 
 The converter and Lua addon source are licensed under the GNU Affero General
-Public License, version 3 ([AGPL-3.0-only](LICENSE)). Adapted rs-map-viewer code
+Public License, version 3 or later ([AGPL-3.0-or-later](LICENSE)). Adapted rs-map-viewer code
 retains its BSD-2-Clause notice in `third_party/rs-map-viewer-LICENSE`.
 Game/cache assets are not included or relicensed by this repository.

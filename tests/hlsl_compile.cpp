@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Optional native Microsoft HLSL compiler test helper. No renderer/GPU required.
 // Windows: cl /EHsc /std:c++17 tests/hlsl_compile.cpp /Fe:hlsl_compile.exe
 // Also builds as a 64-bit Winelib program with wineg++.

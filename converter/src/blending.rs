@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-or-later
 //! RT4 ground blend masks, prepared offline. These are interpolation controls,
 //! not rendered terrain tiles: native images and terrain triangles stay intact.
 //! Reference: rt4/SceneGraph buildGlPlainTiles, addGlPlainTile and

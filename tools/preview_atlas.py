@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Run with Blender: blender --python open_in_blender.py
 The mesh/UVs stay untouched. Nodes reproduce independent atlas texture wrapping.
 """

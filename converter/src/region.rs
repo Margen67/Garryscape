@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-or-later
 //! Native terrain geometry and an exact-copy texture atlas. No rasterized tiles.
 use crate::{
     binary::Reader,

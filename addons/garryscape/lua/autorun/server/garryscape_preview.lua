@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: AGPL-3.0-only
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Automate the in-game preview using compiled Source assets only.
 AddCSLuaFile("autorun/client/garryscape_utilities.lua");
 AddCSLuaFile("autorun/client/garryscape_shader.lua");

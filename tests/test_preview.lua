@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: AGPL-3.0-only
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Exercise teleport hooks without pretending to run the Source engine.
 local script = "addons/garryscape/lua/autorun/server/garryscape_preview.lua";
 local hooks, timers, map, config, entities, errors, validModel;

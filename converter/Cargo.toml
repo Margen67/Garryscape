@@ -2,7 +2,7 @@
 name = "garryscape-convert"
 version = "0.9.0"
 edition = "2021"
-license = "AGPL-3.0-only"
+license = "AGPL-3.0-or-later"
 description = "Offline 2009Scape terrain to glTF and Source DMX converter"
 repository = "https://github.com/Margen67/Garryscape"
 readme = "../README.md"

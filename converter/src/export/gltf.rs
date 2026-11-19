@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-or-later
 use crate::region::RegionMesh;
 use anyhow::Result;
 use serde_json::{json, Value};

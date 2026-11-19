@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: AGPL-3.0-only
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 CreateClientConVar("garryscape_ground_blending", "1", true, false, "Blend neighboring RuneScape terrain materials");
 hook.Add("PopulateToolMenu", "GarryscapeUtilities", function()
     spawnmenu.AddToolCategory("Utilities", "Garryscape", "Garryscape");

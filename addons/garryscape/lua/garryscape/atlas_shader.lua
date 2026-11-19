@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: AGPL-3.0-only
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- EGSM's public shader API supplies native model transforms and Source lighting.
 -- No cache decoding, vertex deformation, or per-frame Lua work.
 shaderlib.CompileVertexShader("GarryscapeAtlasVS", 0, [==[

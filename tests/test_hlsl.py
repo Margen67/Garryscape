@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Compile actual EGSM HLSL variants with Microsoft's Shader Model 3 compiler.
 
 Build hlsl_compile.cpp with the Windows SDK, or Winelib, then set

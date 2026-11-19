@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-or-later
 use anyhow::{ensure, Context as _, Result};
 /// Bounds-checked cursor over a big-endian cache stream.
 pub(crate) struct Reader<'data> {
