@@ -60,6 +60,7 @@ pub(crate) fn write(baked: &RegionMesh, root: &Path, namespace: &str, id: &str) 
         fs::create_dir_all(p)?;
     }
     let png = png(baked)?;
+    fs::write(root.join("preview-atlas.png"), &png)?;
     gltf::write(baked, &png, &preview, id)?;
     vtf::write(baked, &materials.join(format!("{id}.vtf")))?;
     for (i, surface) in baked.materials.iter().enumerate() {

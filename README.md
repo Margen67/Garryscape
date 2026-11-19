@@ -70,6 +70,7 @@ output/2009scape/regions/50_50/
     50_50.gltf
     50_50.bin
     50_50.png
+    50_50.webp
     open_in_blender.py
     ground_blending.json
   source/garryscape/2009scape/regions/50_50/
@@ -125,7 +126,16 @@ The native-image atlas is **1024×512**, about **2.67 MiB** as lossless RGBA8888
 with mipmaps, replacing the former 8192×8192 per-tile bake. The manifest records
 native image rectangles and CRCs so pixel preservation can be checked.
 
-### Required model shader: EGSM
+Select the preview atlas with `--preview-texture both|oxipng|webp`.
+The default, `both`, includes lossless WebP and an optimized PNG fallback in
+one glTF. Use `oxipng` for PNG alone or `webp` to require WebP support in the
+glTF importer. The script requires Python 3 and the selected encoders on
+`PATH` ([OxiPNG](https://github.com/oxipng/oxipng/releases) and
+[`cwebp`](https://developers.google.com/speed/webp/download)). It uses OxiPNG's
+maximum preset and WebP's maximum lossless preset with transparent RGB
+preservation. The Source VTF is produced separately.
+
+## Required model shader: EGSM
 
 Keeping one atlas while independently repeating each original image requires
 an atlas-aware material shader. Garryscape includes its Lua/HLSL shader source,

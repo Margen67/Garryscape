@@ -12,6 +12,7 @@ Usage: ./convert.sh regions X Y [options]
   --output PATH      Build/source/preview directory (default: ./output)
   --studiomdl PATH   GMod's bin/win64/studiomdl.exe
   --addon PATH       Compiled model/material destination
+  --preview-texture both|oxipng|webp  Preview atlas format (default: both)
   --preview-only     Export glTF, DMX, QC and materials without compiling/installing
   --rebuild          Regenerate converted assets even if inputs have not changed
 Only terrain is implemented. Region coordinates are required. No collision.
@@ -34,15 +35,17 @@ OUTPUT="$ROOT/output"
 STUDIOMDL='C:/Program Files (x86)/Steam/steamapps/common/GarrysMod/bin/win64/studiomdl.exe'
 ADDON='C:/Program Files (x86)/Steam/steamapps/common/GarrysMod/garrysmod/addons/garryscape'
 PREVIEW=0
+PREVIEW_TEXTURE=both
 REBUILD=()
 while (( $# )); do
     case "$1" in
         --preview-only) PREVIEW=1; shift ;;
         --rebuild) REBUILD=(--rebuild); shift ;;
-        --cache|--scale|--name|--output|--studiomdl|--addon)
+        --cache|--scale|--name|--output|--studiomdl|--addon|--preview-texture)
             (( $# >= 2 )) || fail "$1 requires a value"
             case "$1" in
                 --cache) CACHE=$2 ;; --scale) SCALE=$2 ;; --name) NAME=$2 ;;
+                --preview-texture) PREVIEW_TEXTURE=$2 ;;
                 --output) OUTPUT=$2 ;; --studiomdl) STUDIOMDL=$2 ;; --addon) ADDON=$2 ;;
             esac
             shift 2 ;;
@@ -61,6 +64,25 @@ ADDON=$(shell_path "$ADDON")
 if [[ -f $STUDIOMDL ]]; then STUDIOMDL="$(cd -- "$(dirname -- "$STUDIOMDL")" && pwd)/$(basename -- "$STUDIOMDL")"; fi
 [[ -f "$CACHE/main_file_cache.dat2" || -f "$CACHE/main_file_cache.dat2.dat" || -f "$CACHE/LIVE/main_file_cache.dat2" || -f "$CACHE/LIVE/main_file_cache.dat2.dat" ]] || fail "2009Scape cache not found in $CACHE. Supply your revision-530 cache with --cache; no cache is downloaded."
 if (( ! PREVIEW )); then [[ -f $STUDIOMDL ]] || fail "StudioMDL not found: $STUDIOMDL (use --preview-only to export without it)"; fi
+case "$PREVIEW_TEXTURE" in
+    both|oxipng|webp) ;;
+    *) fail 'Preview texture must be both, oxipng or webp.' ;;
+esac
+case "$PREVIEW_TEXTURE" in
+    both|oxipng) command -v oxipng >/dev/null 2>&1 || fail 'Install OxiPNG and add oxipng to PATH.' ;;
+esac
+case "$PREVIEW_TEXTURE" in
+    both|webp) command -v cwebp >/dev/null 2>&1 || fail 'Install the WebP tools and add cwebp to PATH.' ;;
+esac
+if command -v python3 >/dev/null 2>&1 && python3 -c 'import sys' 2>/dev/null; then
+    PYTHON=(python3)
+elif command -v python >/dev/null 2>&1 && python -c 'import sys; sys.exit(sys.version_info.major != 3)' 2>/dev/null; then
+    PYTHON=(python)
+elif command -v py >/dev/null 2>&1 && py -3 -c 'import sys' 2>/dev/null; then
+    PYTHON=(py -3)
+else
+    fail 'Python 3 is required to configure the glTF preview.'
+fi
 command -v cargo >/dev/null 2>&1 || fail 'Nightly Rust/Cargo is required: https://rustup.rs'
 # Resolve the pinned nightly even when this script is called outside the repo.
 (
@@ -77,6 +99,7 @@ CLI="$ROOT/converter/target/release/garryscape-convert"
 [[ ! -f $CLI.exe ]] || CLI=$CLI.exe
 "$CLI" regions "$RX" "$RY" --cache "$(native_path "$CACHE")" --scale "$SCALE" --name "$NAME" --output "$(native_path "$OUTPUT")" "${REBUILD[@]}"
 BUILD="$OUTPUT/$NAME/regions/${RX}_${RY}"
+"${PYTHON[@]}" "$(native_path "$ROOT/tools/encode_preview.py")" "$(native_path "$BUILD")" "${RX}_${RY}" "$PREVIEW_TEXTURE"
 SOURCE="$BUILD/source/garryscape/$NAME/regions/${RX}_${RY}"
 GAME="$BUILD/game"
 if (( PREVIEW )); then echo "Preview ready: $BUILD/preview/${RX}_${RY}.gltf"; exit 0; fi

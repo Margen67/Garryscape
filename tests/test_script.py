@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-only
 """Test Git Bash orchestration with a fake compiler, not a real MDL compile."""
+import json
 import os
 from pathlib import Path
 import shutil
@@ -16,6 +17,9 @@ b=out/ns/'regions'/key
 s=b/'source/garryscape'/ns/'regions'/key;s.mkdir(parents=True,exist_ok=True)
 (s/'model.qc').write_text(f'$modelname "garryscape/{ns}/regions/{key}.mdl"\\n')
 (b/'game').mkdir(exist_ok=True)
+preview=b/'preview';preview.mkdir(exist_ok=True)
+(b/'preview-atlas.png').write_bytes(b'atlas')
+(preview/f'{key}.gltf').write_text(json.dumps({'textures':[{'sampler':0,'source':0}],'images':[{'uri':f'{key}.png'}]}))
 m=b/'game/materials/models/garryscape'/ns/'regions';m.mkdir(parents=True,exist_ok=True)
 (m/f'{key}_0.vmt').write_text('material');(m/f'{key}.vtf').write_text('texture')
 (b/'manifest.json').write_text(json.dumps({'model':f'models/garryscape/{ns}/regions/{key}.mdl'}))
@@ -41,6 +45,8 @@ class Script(unittest.TestCase):
         self.path = Path(self.tmp.name)
         self.repo = self.path/'repo with spaces';self.repo.mkdir()
         shutil.copy(REPO/'convert.sh',self.repo/'convert.sh')
+        (self.repo/'tools').mkdir()
+        shutil.copy(REPO/'tools/encode_preview.py', self.repo/'tools')
         shutil.copy(REPO/'LICENSE',self.repo/'LICENSE')
         shutil.copy(REPO/'rust-toolchain.toml',self.repo/'rust-toolchain.toml')
         (self.repo/'addons/garryscape/lua/autorun/server').mkdir(parents=True)
@@ -53,6 +59,8 @@ class Script(unittest.TestCase):
         (self.repo/'converter/target/release').mkdir(parents=True)
         self.exe(self.repo/'converter/target/release/garryscape-convert',CLI)
         self.bin=self.path/'bin';self.bin.mkdir();self.exe(self.bin/'cargo','#!/bin/sh\ntest "$PWD" = "$GARRYSCAPE_TEST_CARGO_ROOT" || exit 41\ntest -f rust-toolchain.toml || exit 42\nexit 0\n')
+        self.exe(self.bin/'oxipng', '#!/usr/bin/env python3\nimport sys\nassert sys.argv[1:3] == ["-o", "max"]\n')
+        self.exe(self.bin/'cwebp', '#!/usr/bin/env python3\nimport pathlib, sys\nassert sys.argv[1:6] == ["-quiet", "-lossless", "-z", "9", "-exact"]\npathlib.Path(sys.argv[-1]).write_bytes(b"webp")\n')
         self.compiler=self.path/'fake studiomdl.exe';self.exe(self.compiler,COMPILER)
         self.cache=self.path/'cache';self.cache.mkdir();(self.cache/'main_file_cache.dat2').write_bytes(b'cache')
         self.addon=self.path/'installed addon';self.counter=self.path/'counter'
@@ -75,7 +83,7 @@ class Script(unittest.TestCase):
         self.assertFalse(stale.exists())
         self.assertFalse((self.path/'relative output/build').exists())
         self.assertTrue((self.path/'relative output/2009scape/regions/50_50/compiled.json').is_file())
-        self.assertFalse(any(p.suffix in {'.qc','.dmx','.glb','.gltf','.bin','.png'} for p in self.addon.rglob('*')))
+        self.assertFalse(any(p.suffix in {'.qc','.dmx','.glb','.gltf','.bin','.png','.webp'} for p in self.addon.rglob('*')))
         self.assertTrue((self.addon/'lua/autorun/server/garryscape_preview.lua').is_file())
         self.assertTrue((self.addon/'lua/autorun/client/garryscape_shader.lua').is_file())
         self.assertTrue((self.addon/'lua/autorun/client/garryscape_utilities.lua').is_file())
@@ -135,6 +143,26 @@ print(path)
     def test_preview_does_not_compile_or_install(self):
         r=self.run_script('--preview-only');self.assertEqual(r.returncode,0,r.stderr)
         self.assertFalse(self.counter.exists());self.assertFalse(self.addon.exists())
+    def test_preview_texture_modes(self):
+        region = self.path/'relative output/2009scape/regions/50_50/preview'
+        extension = 'EXT_texture_webp'
+        for mode in (None, 'webp', 'both', 'oxipng'):
+            args = () if mode is None else ('--preview-texture', mode)
+            result = self.run_script('--preview-only', *args)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            doc = json.loads((region/'50_50.gltf').read_text())
+            png = mode != 'webp'
+            webp = mode != 'oxipng'
+            self.assertEqual((region/'50_50.png').is_file(), png)
+            self.assertEqual((region/'50_50.webp').is_file(), webp)
+            texture = doc['textures'][0]
+            self.assertEqual('source' in texture, png)
+            self.assertEqual(extension in doc.get('extensionsUsed', []), webp)
+            self.assertEqual(extension in doc.get('extensionsRequired', []), not png)
+            if webp:
+                source = texture['extensions'][extension]['source']
+                self.assertEqual(doc['images'][source]['uri'], '50_50.webp')
+
     def test_region_required(self):
         r=subprocess.run(['bash',str(self.repo/'convert.sh'),'regions','50'],capture_output=True,text=True)
         self.assertNotEqual(r.returncode,0);self.assertIn('Specify the region',r.stderr)

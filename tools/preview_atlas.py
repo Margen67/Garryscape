@@ -15,7 +15,11 @@ doc=json.loads(path.read_text())
 before=set(bpy.data.objects)
 bpy.ops.import_scene.gltf(filepath=str(path))
 objects=[o for o in bpy.data.objects if o not in before]
-atlas=bpy.data.images.load(str(folder/doc['images'][0]['uri']),check_existing=True)
+texture=doc['textures'][0]
+source=texture.get('source')
+if source is None:
+    source=texture['extensions']['EXT_texture_webp']['source']
+atlas=bpy.data.images.load(str(folder/doc['images'][source]['uri']),check_existing=True)
 
 def native_color(tree,entry,source_uv=None):
     data=entry['extras']['garryscapeAtlas']

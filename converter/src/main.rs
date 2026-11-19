@@ -203,7 +203,7 @@ fn outputs_present(build: &Path, name: &str, id: &str) -> Result<bool> {
     for path in [
         build.join(format!("preview/{id}.gltf")),
         build.join(format!("preview/{id}.bin")),
-        build.join(format!("preview/{id}.png")),
+        build.join("preview-atlas.png"),
         build.join("preview/open_in_blender.py"),
         build.join(format!("source/garryscape/{name}/regions/{id}/model.qc")),
         build.join(format!(
@@ -214,6 +214,11 @@ fn outputs_present(build: &Path, name: &str, id: &str) -> Result<bool> {
         if !path.is_file() {
             return Ok(false);
         }
+    }
+    if !build.join(format!("preview/{id}.png")).is_file()
+        && !build.join(format!("preview/{id}.webp")).is_file()
+    {
+        return Ok(false);
     }
     let manifest: serde_json::Value =
         serde_json::from_slice(&fs::read(build.join("manifest.json"))?)?;
