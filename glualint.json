@@ -1,0 +1,16 @@
+{
+    "lint_profanity": false,
+    "lint_unusedParameters": true,
+    "lint_unusedLoopVars": true,
+    "lint_inconsistentVariableStyle": true,
+    "lint_spaceBetweenParens": true,
+    "lint_spaceBetweenBrackets": true,
+    "lint_spaceBetweenBraces": true,
+    "lint_spaceBeforeComma": true,
+    "lint_maxLineLength": 180,
+    "prettyprint_spaceEmptyParens": false,
+    "prettyprint_spaceEmptyBraces": false,
+    "prettyprint_spaceAfterLabel": true,
+    "prettyprint_semicolons": true,
+    "prettyprint_minimizeParens": true
+}

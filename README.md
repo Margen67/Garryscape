@@ -244,6 +244,10 @@ python tests/test_preview.py  # optional liblua 5.3/5.4 for the lifecycle harnes
 python tests/test_hlsl.py     # optional native Microsoft HLSL compiler harness
 ```
 
+For GLua linting, install [GLuaFixer](https://github.com/FPtje/GLuaFixer) and
+run `glualint lint addons tests` from the repository root. The linter reads
+`glualint.json` automatically.
+
 GitHub Actions runs these checks on **Windows x64 only** using the pinned
 nightly toolchain, with a matrix for debug (`dev`) and optimized (`release`)
 profiles. Both profiles run Clippy, tests and builds. Formatting differences and
