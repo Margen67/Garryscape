@@ -14,9 +14,17 @@ concurrency:
 
 jobs:
   converter:
-    name: Rust checks and converter (Windows x64)
+    name: Rust checks and converter (Windows x64, ${{ matrix.configuration }})
     runs-on: windows-2025
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - configuration: debug
+            profile: dev
+          - configuration: release
+            profile: release
     steps:
       - name: Check out source
         uses: actions/checkout@main
@@ -44,15 +52,16 @@ jobs:
 
       - name: Run all enabled Clippy checks
         # Compatible checks are strict; source-scoped exceptions document native math.
-        run: cargo clippy --locked --manifest-path converter/Cargo.toml --all-targets --target x86_64-pc-windows-msvc --message-format=short -- -D warnings
+        run: cargo clippy --locked --manifest-path converter/Cargo.toml --all-targets --profile ${{ matrix.profile }} --target x86_64-pc-windows-msvc --message-format=short -- -D warnings
 
       - name: Run Rust tests
-        run: cargo test --locked --manifest-path converter/Cargo.toml --all-targets --target x86_64-pc-windows-msvc --message-format=short
+        run: cargo test --locked --manifest-path converter/Cargo.toml --all-targets --profile ${{ matrix.profile }} --target x86_64-pc-windows-msvc --message-format=short
 
-      - name: Build release converter
-        run: cargo build --locked --release --manifest-path converter/Cargo.toml --target x86_64-pc-windows-msvc --message-format=short
+      - name: Build converter
+        run: cargo build --locked --profile ${{ matrix.profile }} --manifest-path converter/Cargo.toml --target x86_64-pc-windows-msvc --message-format=short
 
       - name: Upload Windows x64 converter
+        if: matrix.profile == 'release'
         uses: actions/upload-artifact@main
         with:
           name: garryscape-convert-windows-x64

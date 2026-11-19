@@ -13,7 +13,7 @@ converter, not the former lost release; see [RECOVERY.md](RECOVERY.md).
 
 Install [Rust through rustup](https://rustup.rs/) (the MSVC toolchain also needs
 Visual Studio's C++ build tools and Windows SDK), Garry's Mod, and optionally
-Blender. The repository pins **nightly-2026-11-18** with Clippy and rustfmt in
+Blender. The repository pins **nightly-2026-11-19** with Clippy and rustfmt in
 `rust-toolchain.toml`; rustup installs that toolchain on first use. The script
 selects it from any working directory, including paths containing spaces. Run:
 
@@ -234,9 +234,12 @@ python tests/test_hlsl.py     # optional native Microsoft HLSL compiler harness
 ```
 
 GitHub Actions runs these checks on **Windows x64 only** using the pinned
-nightly toolchain. Formatting differences and build/test/lint errors fail the
-workflow, including every unsuppressed compiler and Clippy warning. Successful
-runs upload the release CLI as the **garryscape-convert-windows-x64** artifact.
+nightly toolchain, with a matrix for debug (`dev`) and optimized (`release`)
+profiles. Both profiles run Clippy, tests and builds. Formatting differences and
+build/test/lint errors fail the workflow, including every unsuppressed compiler
+and Clippy warning. Only the release build uploads the CLI as the
+**garryscape-convert-windows-x64** artifact. `convert.sh` also builds and runs
+the optimized release converter.
 No RuneScape cache or compiled game assets are needed or uploaded by CI.
 
 `converter/Cargo.toml` enables all 63 opt-in compiler lints in the pinned nightly
