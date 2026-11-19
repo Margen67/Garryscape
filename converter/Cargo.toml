@@ -21,6 +21,7 @@ png = "0.17"
 [profile.release]
 codegen-units = 1
 lto = true
+strip = true
 
 # rustc has no equivalent of -Wall. Enable every opt-in lint in the pinned
 # nightly toolchain, retaining default warning/error levels for the rest.
