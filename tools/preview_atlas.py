@@ -37,6 +37,13 @@ if len(paths)!=1:
     raise RuntimeError('Expected one glTF in the preview directory')
 path=paths[0]
 doc=json.loads(path.read_text())
+startup_types = {"Camera": "CAMERA", "Cube": "MESH", "Light": "LIGHT"}
+startup_objects = tuple(bpy.context.scene.objects)
+clear_startup_scene = (
+    not bpy.data.filepath
+    and {obj.name: obj.type for obj in startup_objects} == startup_types
+    and all(obj.data.name == obj.name and len(obj.users_scene) == 1 for obj in startup_objects)
+)
 before=set(bpy.data.objects)
 bpy.ops.import_scene.gltf(filepath=str(path))
 objects=[o for o in bpy.data.objects if o not in before]
@@ -204,6 +211,10 @@ if blend_path.exists():
                 slots[material.name]=len(mesh.materials);mesh.materials.append(material)
             poly.material_index=slots[material.name]
     print('Garryscape: analytic ground blending enabled in Blender')
+
+if clear_startup_scene and any(obj.type == "MESH" for obj in objects):
+    for obj in startup_objects:
+        bpy.data.objects.remove(obj, do_unlink=True)
 
 for obj in bpy.context.selected_objects:obj.select_set(False)
 for obj in objects:obj.select_set(True)
