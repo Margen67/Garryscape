@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Offline revision-530 terrain conversion and Source build preparation.
-// png uses miniz_oxide 0.8 and enables flate2 defaults, which pull in 0.9.
-// flate2 selects zlib-rs when both Rust backends are enabled.
-#![allow(
-    clippy::multiple_crate_versions,
-    reason = "transitive png and flate2 version requirements"
-)]
 // Feature gates are necessary to check all nightly opt-in lints. These two
 // diagnostics prohibit the very gates that activate those requested checks.
 #![allow(
@@ -203,7 +197,7 @@ fn outputs_present(build: &Path, name: &str, id: &str) -> Result<bool> {
     for path in [
         build.join(format!("preview/{id}.gltf")),
         build.join(format!("preview/{id}.bin")),
-        build.join("preview-atlas.png"),
+        build.join(format!("preview/{id}.webp")),
         build.join("preview/open_in_blender.py"),
         build.join(format!("source/garryscape/{name}/regions/{id}/model.qc")),
         build.join(format!(
@@ -214,11 +208,6 @@ fn outputs_present(build: &Path, name: &str, id: &str) -> Result<bool> {
         if !path.is_file() {
             return Ok(false);
         }
-    }
-    if !build.join(format!("preview/{id}.png")).is_file()
-        && !build.join(format!("preview/{id}.webp")).is_file()
-    {
-        return Ok(false);
     }
     let manifest: serde_json::Value =
         serde_json::from_slice(&fs::read(build.join("manifest.json"))?)?;

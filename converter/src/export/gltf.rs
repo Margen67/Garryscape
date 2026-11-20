@@ -49,7 +49,7 @@ fn view(bin: &mut Vec<u8>, views: &mut Vec<Value>, data: &[u8], target: Option<u
 fn floats(values: impl IntoIterator<Item = f32>) -> Vec<u8> {
     values.into_iter().flat_map(f32::to_le_bytes).collect()
 }
-/// Write the glTF preview, binary buffer and unmodified atlas PNG.
+/// Write the glTF preview, binary buffer and lossless WebP reference.
 #[allow(
     clippy::too_many_lines,
     reason = "keep native opcode dispatch and ordered conversion stages together"
@@ -70,7 +70,7 @@ fn floats(values: impl IntoIterator<Item = f32>) -> Vec<u8> {
     clippy::suboptimal_flops,
     reason = "preserve native fixed-point truncation, bounded coordinate math and separate floating-point rounding"
 )]
-pub(crate) fn write(baked: &RegionMesh, png: &[u8], path: &Path, id: &str) -> Result<()> {
+pub(crate) fn write(baked: &RegionMesh, path: &Path, id: &str) -> Result<()> {
     let mut bin = vec![];
     let mut views = vec![];
     let vertices = baked
@@ -177,11 +177,9 @@ pub(crate) fn write(baked: &RegionMesh, png: &[u8], path: &Path, id: &str) -> Re
     pad(&mut bin, 0);
     fs::create_dir_all(path)?;
     let buffer_name = format!("{id}.bin");
-    let image_name = format!("{id}.png");
-    let document = json!({"asset":{"version":"2.0","generator":"Garryscape offline converter"},"scene":0_i32,"scenes":[{"nodes":[0_i32]}],"nodes":[{"name":"terrain","mesh":0_i32}],"meshes":[{"name":"region","primitives":primitives}],"materials":materials,"textures":[{"sampler":0_i32,"source":0_i32}],"samplers":[{"magFilter":9_729_i32,"minFilter":9_987_i32,"wrapS":33_071_i32,"wrapT":33_071_i32}],"images":[{"uri":image_name}],"buffers":[{"uri":buffer_name,"byteLength":bin.len()}],"bufferViews":views,"accessors":accessors});
+    let image_name = format!("{id}.webp");
+    let document = json!({"asset":{"version":"2.0","generator":"Garryscape offline converter"},"scene":0_i32,"scenes":[{"nodes":[0_i32]}],"nodes":[{"name":"terrain","mesh":0_i32}],"meshes":[{"name":"region","primitives":primitives}],"materials":materials,"extensionsUsed":["EXT_texture_webp"],"extensionsRequired":["EXT_texture_webp"],"textures":[{"sampler":0_i32,"extensions":{"EXT_texture_webp":{"source":0_i32}}}],"samplers":[{"magFilter":9_729_i32,"minFilter":9_987_i32,"wrapS":33_071_i32,"wrapT":33_071_i32}],"images":[{"uri":image_name}],"buffers":[{"uri":buffer_name,"byteLength":bin.len()}],"bufferViews":views,"accessors":accessors});
     fs::write(path.join(&buffer_name), bin)?;
-    // Write the original encoded atlas verbatim: no preview resize or recompression.
-    fs::write(path.join(&image_name), png)?;
     fs::write(
         path.join(format!("{id}.gltf")),
         serde_json::to_vec_pretty(&document)?,
@@ -203,7 +201,7 @@ mod tests {
         clippy::absolute_paths,
         reason = "qualified names identify the format or IO operation directly"
     )]
-    fn external_texture_is_written_verbatim_at_original_dimensions() {
+    fn preview_requires_its_external_webp_atlas() {
         let positions = [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]];
         let vertices = positions.map(|pos| Vertex {
             pos,
@@ -240,7 +238,6 @@ mod tests {
             bounds: [[0., 0., 0.], [1., 1., 0.]],
             plane_triangles: [1, 0, 0, 0],
         };
-        let encoded = crate::export::png(&baked).unwrap();
         let directory = std::env::temp_dir()
             .join(format!(
                 "garryscape-gltf-{}-{}",
@@ -251,17 +248,16 @@ mod tests {
                     .as_nanos()
             ))
             .join("fixture");
-        write(&baked, &encoded, &directory, "fixture").unwrap();
-        assert_eq!(fs::read(directory.join("fixture.png")).unwrap(), encoded);
-        let decoder = png::Decoder::new(std::io::Cursor::new(&encoded));
-        let mut reader = decoder.read_info().unwrap();
-        assert_eq!((reader.info().width, reader.info().height), (2, 2));
-        let mut pixels = vec![0; reader.output_buffer_size().unwrap()];
-        let _consumed = reader.next_frame(&mut pixels).unwrap();
-        assert_eq!(pixels, baked.pixels);
+        write(&baked, &directory, "fixture").unwrap();
         let document: Value =
             serde_json::from_slice(&fs::read(directory.join("fixture.gltf")).unwrap()).unwrap();
-        assert_eq!(document["images"][0]["uri"], "fixture.png");
+        assert_eq!(document["images"][0]["uri"], "fixture.webp");
+        assert_eq!(document["extensionsRequired"][0], "EXT_texture_webp");
+        assert_eq!(
+            document["textures"][0]["extensions"]["EXT_texture_webp"]["source"],
+            0_i32
+        );
+        assert!(document["textures"][0].get("source").is_none());
         assert_eq!(document["buffers"][0]["uri"], "fixture.bin");
         assert!(document["images"][0].get("bufferView").is_none());
         assert_eq!(

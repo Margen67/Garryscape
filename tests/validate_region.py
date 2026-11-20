@@ -138,26 +138,17 @@ def validate(root):
     assert len(doc['textures']) == len(doc['meshes']) == 1
     texture = doc['textures'][0]
     webp_extension = 'EXT_texture_webp'
-    sources = set()
-    if 'source' in texture:
-        source = texture['source']
-        sources.add(source)
-        assert doc['images'][source]['uri'] == f'{region}.png'
-        png = (folder / f'{region}.png').read_bytes()
-        assert png[:8] == b'\x89PNG\r\n\x1a\n'
-        assert struct.unpack_from('>II', png, 16) == (width, height)
-    if webp_extension in texture.get('extensions', {}):
-        source = texture['extensions'][webp_extension]['source']
-        sources.add(source)
-        assert doc['images'][source]['uri'] == f'{region}.webp'
-        assert webp_extension in doc['extensionsUsed']
-        assert (webp_extension in doc.get('extensionsRequired', [])) == ('source' not in texture)
-        webp = (folder / f'{region}.webp').read_bytes()
-        assert webp[:4] == b'RIFF' and webp[8:16] == b'WEBPVP8L'
-        assert webp[20] == 0x2f
-        dimensions, = struct.unpack_from('<I', webp, 21)
-        assert ((dimensions & 0x3fff) + 1, (dimensions >> 14 & 0x3fff) + 1) == (width, height)
-    assert sources and sources == set(range(len(doc['images'])))
+    assert 'source' not in texture
+    assert webp_extension in doc['extensionsUsed']
+    assert webp_extension in doc['extensionsRequired']
+    assert texture['extensions'][webp_extension]['source'] == 0
+    assert doc['images'] == [{'uri': f'{region}.webp'}]
+    webp = (folder / f'{region}.webp').read_bytes()
+    assert webp[:4] == b'RIFF' and webp[8:16] == b'WEBPVP8L'
+    assert webp[20] == 0x2f
+    dimensions, = struct.unpack_from('<I', webp, 21)
+    assert ((dimensions & 0x3fff) + 1, (dimensions >> 14 & 0x3fff) + 1) == (width, height)
+    assert not (folder / f'{region}.png').exists()
     assert all(not material['doubleSided'] for material in doc['materials'])
     count = sum(doc['accessors'][p['indices']]['count'] // 3 for p in doc['meshes'][0]['primitives'])
     assert count == manifest['triangles']

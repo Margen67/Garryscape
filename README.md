@@ -69,7 +69,6 @@ output/2009scape/regions/50_50/
   preview/
     50_50.gltf
     50_50.bin
-    50_50.png
     50_50.webp
     open_in_blender.py
     ground_blending.json
@@ -126,15 +125,11 @@ The native-image atlas is **1024×512**, about **2.67 MiB** as lossless RGBA8888
 with mipmaps, replacing the former 8192×8192 per-tile bake. The manifest records
 native image rectangles and CRCs so pixel preservation can be checked.
 
-Select the preview atlas with `--preview-texture both|oxipng|webp`.
-The default, `both`, includes lossless WebP and an optimized PNG fallback in
-one glTF. Use `oxipng` for PNG alone or `webp` to require WebP support in the
-glTF importer. The script requires Python 3.11 or newer and the selected encoders on
-`PATH` ([OxiPNG](https://github.com/oxipng/oxipng/releases) and
-[`cwebp`](https://developers.google.com/speed/webp/download)). It uses OxiPNG's
-maximum preset and WebP's maximum lossless preset with transparent RGB
-preservation. Python versions below 3.12.10 run with a warning. The Source VTF
-is produced separately.
+Install [`cwebp`](https://developers.google.com/speed/webp/download) and add it
+to `PATH` for fresh conversions. The glTF preview requires
+`EXT_texture_webp`. The converter encodes lossless WebP at maximum compression
+and preserves RGB under fully transparent pixels. The Source VTF is produced
+separately.
 
 ## Required model shader: EGSM
 
@@ -204,7 +199,7 @@ location. You can also open the script in Blender's Text Editor and choose
 
 Use that loader for correct atlas wrapping. Plain glTF import preserves the
 geometry and metadata but does not configure the custom atlas material. The
-folder contains the selected atlas encodings and one binary mesh buffer.
+folder contains one lossless WebP atlas and one binary mesh buffer.
 
 Unchanged input/configuration reuses converted files and the compiled model.
 Changing the StudioMDL executable triggers compilation again; `--rebuild` forces
@@ -274,8 +269,8 @@ exceptions are limited to conflicting rules and checks unsuitable for this CLI
 helpers). Native arithmetic, protocol endianness, validated table indexing,
 CLI output and exact equality use local `#[allow(..., reason = "...")]`
 attributes on the relevant items. Tests scope their fixture/unwrap exceptions
-to test modules. The crate also documents the incompatible transitive
-`miniz_oxide` requirements of png and flate2 and the nightly lint feature gates.
+to test modules. The crate also documents exceptions for the nightly lint
+feature gates.
 No blanket `allow(warnings)` or Clippy group suppression is used.
 
 Rust has no universal `-Wall` group, so the explicit opt-in list needs updating

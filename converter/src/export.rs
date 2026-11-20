@@ -4,24 +4,59 @@ pub(crate) mod dmx;
 pub(crate) mod gltf;
 pub(crate) mod vtf;
 use crate::region::RegionMesh;
-use anyhow::Result;
-use std::{fs, path::Path};
-/// Encode the native atlas as an RGBA PNG.
-pub(crate) fn png(baked: &RegionMesh) -> Result<Vec<u8>> {
-    let mut output = vec![];
-    {
-        let mut enc = png::Encoder::new(
-            &mut output,
-            u32::try_from(baked.width)?,
-            u32::try_from(baked.height)?,
-        );
-        enc.set_color(png::ColorType::Rgba);
-        enc.set_depth(png::BitDepth::Eight);
-        enc.set_compression(png::Compression::High);
-        enc.write_header()?.write_image_data(&baked.pixels)?;
-    }
-    Ok(output)
+use anyhow::{ensure, Context as _, Result};
+use std::{
+    fs,
+    io::{BufWriter, ErrorKind, Write as _},
+    path::Path,
+    process::Command,
+};
+
+/// Encode the original RGBA pixels using cwebp's maximum lossless preset.
+fn write_webp(baked: &RegionMesh, preview: &Path, id: &str) -> Result<()> {
+    let input = preview.join(".atlas-input.pam");
+    let result = (|| -> Result<()> {
+        let mut writer = BufWriter::new(fs::File::create(&input)?);
+        write!(
+            writer,
+            "P7\nWIDTH {}\nHEIGHT {}\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n",
+            baked.width, baked.height
+        )?;
+        writer.write_all(&baked.pixels)?;
+        writer.flush()?;
+        drop(writer);
+
+        let status = Command::new("cwebp")
+            .current_dir(preview)
+            .args([
+                "-quiet",
+                "-lossless",
+                "-z",
+                "9",
+                "-exact",
+                ".atlas-input.pam",
+                "-o",
+            ])
+            .arg(format!("{id}.webp"))
+            .status()
+            .context("Running cwebp. Install the WebP tools and add cwebp to PATH")?;
+        ensure!(status.success(), "cwebp failed: {status}");
+        Ok(())
+    })();
+    let cleanup = remove_generated_file(&input);
+    result?;
+    cleanup
 }
+
+/// Remove an old generated file if it exists.
+fn remove_generated_file(path: &Path) -> Result<()> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
 /// Write terrain previews, Source inputs, materials and the build manifest.
 #[allow(
     clippy::print_stdout,
@@ -59,9 +94,15 @@ pub(crate) fn write(baked: &RegionMesh, root: &Path, namespace: &str, id: &str) 
     for p in [&source, &materials, &preview] {
         fs::create_dir_all(p)?;
     }
-    let png = png(baked)?;
-    fs::write(root.join("preview-atlas.png"), &png)?;
-    gltf::write(baked, &png, &preview, id)?;
+    write_webp(baked, &preview, id)?;
+    gltf::write(baked, &preview, id)?;
+    for obsolete in [
+        preview.join(format!("{id}.png")),
+        root.join("preview-atlas.png"),
+        root.join("preview-encoding.json"),
+    ] {
+        remove_generated_file(&obsolete)?;
+    }
     vtf::write(baked, &materials.join(format!("{id}.vtf")))?;
     for (i, surface) in baked.materials.iter().enumerate() {
         let [x, y, w, h] = surface.rect;
