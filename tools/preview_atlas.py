@@ -102,8 +102,11 @@ def native_color(tree,entry,source_uv=None):
     return multiply.outputs['Vector'],math('MULTIPLY',alpha,tint[3])
 
 def apply_material(material,entry):
-    material.use_nodes=True
-    tree=material.node_tree;tree.nodes.clear()
+    if material.node_tree is None:
+        # Older Blender versions can create materials without a node tree.
+        material.use_nodes = True
+    tree = material.node_tree
+    tree.nodes.clear()
     output=tree.nodes.new('ShaderNodeOutputMaterial')
     bsdf=tree.nodes.new('ShaderNodeBsdfPrincipled');bsdf.inputs['Roughness'].default_value=1
     tree.links.new(bsdf.outputs['BSDF'],output.inputs['Surface'])
