@@ -1,12 +1,37 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Run with Blender: blender --python open_in_blender.py
+"""Run with Python to open Blender, or run directly inside Blender.
 The mesh/UVs stay untouched. Nodes reproduce independent atlas texture wrapping.
 """
 from pathlib import Path
 import json
-import bpy
 
-folder=Path(__file__).resolve().parent
+try:
+    import bpy
+except ModuleNotFoundError as error:
+    if error.name != "bpy":
+        raise
+
+    import os
+    import shutil
+    import subprocess
+
+    blender = shutil.which("blender")
+    steam_root = os.environ.get("ProgramFiles(x86)")
+    if blender is None and steam_root:
+        steam_blender = Path(steam_root) / "Steam/steamapps/common/Blender/blender.exe"
+        if steam_blender.is_file():
+            blender = str(steam_blender)
+    if blender is None:
+        raise SystemExit("Blender was not found. Add it to PATH or run this script inside Blender.")
+
+    script = Path(__file__).resolve()
+    raise SystemExit(subprocess.call([blender, "--python-exit-code", "1", "--python", str(script)]))
+
+editor = bpy.context.space_data
+if editor is not None and editor.type == "TEXT_EDITOR" and editor.text and editor.text.filepath:
+    folder = Path(bpy.path.abspath(editor.text.filepath)).resolve().parent
+else:
+    folder = Path(__file__).resolve().parent
 paths=list(folder.glob('*.gltf'))
 if len(paths)!=1:
     raise RuntimeError('Expected one glTF in the preview directory')

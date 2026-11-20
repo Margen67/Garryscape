@@ -195,13 +195,16 @@ mesh vertices, triangles, or UVs:
 
 ```bash
 # After conversion, open the preview in a new Blender process:
-'/c/Program Files (x86)/Steam/steamapps/common/Blender/blender.exe' --python \
-  "$PWD/output/2009scape/regions/50_50/preview/open_in_blender.py"
+python output/2009scape/regions/50_50/preview/open_in_blender.py
 ```
+
+The script looks for Blender on `PATH` and in Steam's default Windows install
+location. You can also open the script in Blender's Text Editor and choose
+**Run Script** to import into the current scene.
 
 Use that loader for correct atlas wrapping. Plain glTF import preserves the
 geometry and metadata but does not configure the custom atlas material. The
-folder contains one PNG atlas and one binary mesh buffer; no GLB or SMD is used.
+folder contains the selected atlas encodings and one binary mesh buffer.
 
 Unchanged input/configuration reuses converted files and the compiled model.
 Changing the StudioMDL executable triggers compilation again; `--rebuild` forces
