@@ -50,6 +50,10 @@ jobs:
         if: matrix.profile == 'dev'
         uses: astral-sh/ruff-action@main
 
+      - name: Check Python formatting
+        if: matrix.profile == 'dev'
+        run: ruff format --check .
+
       - name: Lint GLua
         if: matrix.profile == 'dev'
         run: |-

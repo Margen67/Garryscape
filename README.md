@@ -244,9 +244,8 @@ For GLua linting, install [GLuaFixer](https://github.com/FPtje/GLuaFixer) and
 run `glualint lint addons tests` from the repository root. The linter reads
 `glualint.json` automatically.
 
-Run `ruff check .` from the repository root for Python linting. Windows CI runs
-the same check using `ruff.toml`, which enables preview rules and documents the
-project's exceptions.
+Run `ruff check .` to lint Python and `ruff format .` to apply formatting.
+Windows CI runs linting and `ruff format --check .` using `ruff.toml`.
 
 GitHub Actions runs these checks on **Windows x64 only** using the pinned
 nightly toolchain, with a matrix for debug (`dev`) and optimized (`release`)

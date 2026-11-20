@@ -6,6 +6,7 @@ Build hlsl_compile.cpp with the Windows SDK, or Winelib, then set
 GARRYSCAPE_HLSL_COMPILER and GARRYSCAPE_EGSM_INCLUDES. No compiler DLLs, shader
 includes or compiled output are bundled. This checks compilation, not GPU drawing.
 """
+
 import os
 import re
 import subprocess  # ruff: ignore[suspicious-subprocess-import] -- Runs the explicitly configured test compiler.
@@ -33,9 +34,13 @@ class HlslCompilation(unittest.TestCase):
             msg = "Set GARRYSCAPE_HLSL_COMPILER and GARRYSCAPE_EGSM_INCLUDES for native HLSL tests"
             raise unittest.SkipTest(msg)
         text = (ROOT / "addons/garryscape/lua/garryscape/atlas_shader.lua").read_text()
-        cls.stages = dict(re.findall(
-            r"shaderlib\.Compile(Vertex|Pixel)Shader\([^\n]+\[==\[(.*?)\]==\]\)", text, re.DOTALL,
-        ))
+        cls.stages = dict(
+            re.findall(
+                r"shaderlib\.Compile(Vertex|Pixel)Shader\([^\n]+\[==\[(.*?)\]==\]\)",
+                text,
+                re.DOTALL,
+            )
+        )
 
     def compile_stage(self, stage: str, profile: str) -> None:
         """Compile and validate all variants of the given shader stage."""
@@ -45,7 +50,10 @@ class HlslCompilation(unittest.TestCase):
             # The test operator explicitly selects the compiler.
             result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
                 [self.compiler, str(source), profile, self.includes, "all"],
-                capture_output=True, text=True, timeout=180, check=False,
+                capture_output=True,
+                text=True,
+                timeout=180,
+                check=False,
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             variants = re.findall(r"PASS " + profile + r" lights=(\d) mode=(\d)", result.stdout)

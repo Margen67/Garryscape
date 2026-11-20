@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Independent structural checks on a real converted region (no game assets bundled)."""
+
 import json
 import math
 import re
@@ -44,17 +45,17 @@ def parse_dmx(path: Path) -> set[str]:
                 assert value in elements, ("missing reference", value)
             if field_type == "element_array":
                 assert len(value) % 2 == 0
-                assert all(value[i] == "element" and value[i + 1]
-                           in elements for i in range(0, len(value), 2))
+                assert all(
+                    value[i] == "element" and value[i + 1] in elements
+                    for i in range(0, len(value), 2)
+                )
         if kind == "DmeVertexData":
             count = len(fields["positions"][1])
             assert 0 < count <= 7200
             assert count % 3 == 0
-            for name in ("normals", "textureCoordinates",
-                         "jointWeights", "jointIndices"):
+            for name in ("normals", "textureCoordinates", "jointWeights", "jointIndices"):
                 assert len(fields[name][1]) == count
-            for name in ("positionsIndices", "normalsIndices",
-                         "textureCoordinatesIndices"):
+            for name in ("positionsIndices", "normalsIndices", "textureCoordinatesIndices"):
                 assert list(map(int, fields[name][1])) == list(range(count))
             assert set(fields["jointIndices"][1]) == {"0"}
             assert set(fields["jointWeights"][1]) == {"1"}
@@ -91,63 +92,56 @@ def validate(root: str | Path) -> None:
     qc = (source / "model.qc").read_text()
     assert "$collision" not in qc
     assert "$concave" not in qc
-    assert len(
-        re.findall(
-            r"^\$body ",
-            qc,
-            re.MULTILINE)) == len(
-                list(
-                    source.glob("reference_*.dmx")))
+    assert len(re.findall(r"^\$body ", qc, re.MULTILINE)) == len(
+        list(source.glob("reference_*.dmx"))
+    )
     materials = root / f"game/materials/models/garryscape/{namespace}/regions"
     textures = list(materials.glob("*.vtf"))
     assert len(textures) == 1
     with textures[0].open("rb") as stream:
         header = stream.read(88)
     assert header[:4] == b"VTF\0"
-    assert struct.unpack_from(
-        "<II", header, 4) == (7, 5)
-    header_size, = struct.unpack_from("<I", header, 12)
+    assert struct.unpack_from("<II", header, 4) == (7, 5)
+    (header_size,) = struct.unpack_from("<I", header, 12)
     assert header_size == 88
     assert struct.unpack_from("<I", header, 68) == (1,)
     assert header[80:84] == b"\x30\x00\x00\x00"
-    image_offset, = struct.unpack_from("<I", header, 84)
+    (image_offset,) = struct.unpack_from("<I", header, 84)
     assert image_offset == header_size
     width, height = struct.unpack_from("<HH", header, 16)
     assert (width, height) == (manifest["atlasWidth"], manifest["atlasHeight"])
     assert width >= 2
     assert height >= 2
-    assert width & (
-        width - 1) == height & (height - 1) == 0
+    assert width & (width - 1) == height & (height - 1) == 0
     assert header[56] == max(width, height).bit_length()
-    assert textures[0].stat().st_size == image_offset + sum(4 *
-                            max(width >> i, 1) * max(height >> i, 1) for i in range(header[56]))
-    base = textures[0].read_bytes()[-width * height * 4:]
+    assert textures[0].stat().st_size == image_offset + sum(
+        4 * max(width >> i, 1) * max(height >> i, 1) for i in range(header[56])
+    )
+    base = textures[0].read_bytes()[-width * height * 4 :]
     for image in manifest["atlasImages"]:
         x, y, w, h = image["rect"]
-        raw = b"".join(base[((y + j) * width + x) *
-                       4:((y + j) * width + x + w) * 4] for j in range(h))
-        assert zlib.crc32(
-            raw) == image["crc"], "native atlas image pixels changed"
-    assert struct.unpack_from("<I", header, 20)[
-                              0] & 0x200, "control data needs NOLOD protection"
+        raw = b"".join(
+            base[((y + j) * width + x) * 4 : ((y + j) * width + x + w) * 4] for j in range(h)
+        )
+        assert zlib.crc32(raw) == image["crc"], "native atlas image pixels changed"
+    assert struct.unpack_from("<I", header, 20)[0] & 0x200, "control data needs NOLOD protection"
     blend = manifest["groundBlending"]
     cx, cy, side, _ = blend["rect"]
 
     def control(index: int) -> tuple[int, ...]:
         assert 0 <= index < side * side
         offset = ((cy + index // side) * width + cx + index % side) * 4
-        return tuple(base[offset:offset + 4])
+        return tuple(base[offset : offset + 4])
 
     def address(pixel: tuple[int, ...]) -> int:
         return pixel[0] + 256 * pixel[1] + 65536 * pixel[2]
+
     # EGSM uses sRGB reads for the albedo sampler. The shader restores encoded
     # control bytes before interpreting addresses, masks and descriptor fields.
     for byte in range(256):
         encoded = byte / 255
-        linear = encoded / \
-            12.92 if encoded <= 0.04045 else ((encoded + 0.055) / 1.055)**2.4
-        restored = linear * 12.92 if linear <= 0.0031308 else 1.055 * \
-            linear**(1 / 2.4) - 0.055
+        linear = encoded / 12.92 if encoded <= 0.04045 else ((encoded + 0.055) / 1.055) ** 2.4
+        restored = linear * 12.92 if linear <= 0.0031308 else 1.055 * linear ** (1 / 2.4) - 0.055
         assert round(restored * 255) == byte
     checked = set()
     for cell, plan in enumerate(blend["grid"]):
@@ -166,8 +160,7 @@ def validate(root: str | Path) -> None:
             pointer += 1
             assert header[3] == len(layer["triangles"])
             descriptor = address(header)
-            assert control(descriptor + 4)[0] + \
-                           256 * control(descriptor + 4)[1] > 0
+            assert control(descriptor + 4)[0] + 256 * control(descriptor + 4)[1] > 0
             for triangle in layer["triangles"]:
                 for vertex in triangle:
                     assert control(pointer)[:3] == tuple(vertex)
@@ -184,8 +177,7 @@ def validate(root: str | Path) -> None:
     folder = root / "preview"
     doc = json.loads((folder / f"{region}.gltf").read_text())
     assert doc["asset"]["version"] == "2.0"
-    assert len(
-        doc["buffers"]) == 1
+    assert len(doc["buffers"]) == 1
     assert doc["buffers"][0]["uri"] == f"{region}.bin"
     buffer = (folder / doc["buffers"][0]["uri"]).read_bytes()
     assert len(buffer) == doc["buffers"][0]["byteLength"]
@@ -200,53 +192,58 @@ def validate(root: str | Path) -> None:
     webp = (folder / f"{region}.webp").read_bytes()
     assert webp[:4] == b"RIFF"
     assert webp[8:16] == b"WEBPVP8L"
-    assert webp[20] == 0x2f
-    dimensions, = struct.unpack_from("<I", webp, 21)
-    assert ((dimensions & 0x3fff) +
-        1, (dimensions >> 14 & 0x3fff) +
-        1) == (width, height)
+    assert webp[20] == 0x2F
+    (dimensions,) = struct.unpack_from("<I", webp, 21)
+    assert ((dimensions & 0x3FFF) + 1, (dimensions >> 14 & 0x3FFF) + 1) == (width, height)
     assert not (folder / f"{region}.png").exists()
     assert all(not material["doubleSided"] for material in doc["materials"])
-    count = sum(doc["accessors"][p["indices"]]["count"] //
-                3 for p in doc["meshes"][0]["primitives"])
+    count = sum(
+        doc["accessors"][p["indices"]]["count"] // 3 for p in doc["meshes"][0]["primitives"]
+    )
     assert count == manifest["triangles"]
     if region == "50_50":
         assert count == 11475
-        assert manifest["trianglesPerFloor"] == [
-            8847, 1100, 724, 62]
+        assert manifest["trianglesPerFloor"] == [8847, 1100, 724, 62]
         assert manifest["underwaterTriangles"] == 742
         assert (width, height) == (1024, 512)
         assert manifest["padding"] == 0
         assert manifest["resizedImages"] == 0
-        assert any(m["alphaMode"] == "BLEND" for m in doc["materials"]
-                   ), "missing water transparency"
+        assert any(m["alphaMode"] == "BLEND" for m in doc["materials"]), (
+            "missing water transparency"
+        )
 
     def array(index: int, components: int) -> list[tuple[float, ...]]:
         acc = doc["accessors"][index]
         view = doc["bufferViews"][acc["bufferView"]]
         offset = view.get("byteOffset", 0) + acc.get("byteOffset", 0)
-        return [struct.unpack_from("<" + "f" * components, buffer,
-                                   offset + i * components * 4) for i in range(acc["count"])]
+        return [
+            struct.unpack_from("<" + "f" * components, buffer, offset + i * components * 4)
+            for i in range(acc["count"])
+        ]
+
     vertices = array(0, 3)
     if region == "50_50":
         # Known cache shoreline vertices: the old exporter lowered the bed
         # endpoint 5.44 to 6.8 Source units below the adjoining bank here.
-        unit = json.loads((root / "complete.json").read_text(),
-                          )["scale"] * 0.5 * 128 * 0.0254
-        for x, y in [(33.5, 58), (33.5, 59), (34.5, 49),
-                      (34.5, 50), (34.5, 56.75)]:
+        unit = (
+            json.loads(
+                (root / "complete.json").read_text(),
+            )["scale"]
+            * 0.5
+            * 128
+            * 0.0254
+        )
+        for x, y in [(33.5, 58), (33.5, 59), (34.5, 49), (34.5, 50), (34.5, 56.75)]:
             px, pz = (x - 32) * unit, -(y - 32) * unit
-            heights = [v[1] for v in vertices if abs(
-                v[0] - px) < 1e-5 and abs(v[2] - pz) < 1e-5]
+            heights = [v[1] for v in vertices if abs(v[0] - px) < 1e-5 and abs(v[2] - pz) < 1e-5]
             assert heights, f"no shoreline vertices at {x}/{y}"
             assert all(abs(h) < 1e-5 for h in heights), f"shoreline gap at {x}/{y}: {heights}"
-    assert all("TEXCOORD_1" in p["attributes"]
-               for p in doc["meshes"][0]["primitives"])
+    assert all("TEXCOORD_1" in p["attributes"] for p in doc["meshes"][0]["primitives"])
     normals = array(1, 3)
     assert all(all(math.isfinite(v) for v in a) for a in vertices + normals)
     assert all(abs(sum(v * v for v in n) - 1) < 1e-5 for n in normals)
     for i in range(0, len(vertices), 3):
-        a, b, c = vertices[i:i + 3]
+        a, b, c = vertices[i : i + 3]
         ab = [b[j] - a[j] for j in range(3)]
         ac = [c[j] - a[j] for j in range(3)]
         cross_y = ab[2] * ac[0] - ab[0] * ac[2]

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Run the Lua preview harness with an installed liblua, using Python's stdlib."""
+
 import ctypes
 import ctypes.util
 import os
@@ -13,16 +14,13 @@ class Preview(unittest.TestCase):
 
     def run_lua(self, filename: str) -> None:
         """Load and execute one Lua harness."""
-        name = ctypes.util.find_library(
-            "lua5.4") or ctypes.util.find_library("lua5.3")
+        name = ctypes.util.find_library("lua5.4") or ctypes.util.find_library("lua5.3")
         if not name:
-            self.skipTest(
-                "liblua 5.3/5.4 is not installed; GMod does not need it")
+            self.skipTest("liblua 5.3/5.4 is not installed; GMod does not need it")
         lib = ctypes.CDLL(name)
         lib.luaL_newstate.restype = ctypes.c_void_p
         lib.luaL_openlibs.argtypes = [ctypes.c_void_p]
-        lib.luaL_loadfilex.argtypes = [
-            ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
+        lib.luaL_loadfilex.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
         lib.luaL_loadfilex.restype = ctypes.c_int
         lib.lua_pcallk.argtypes = [
             ctypes.c_void_p,
@@ -30,10 +28,10 @@ class Preview(unittest.TestCase):
             ctypes.c_int,
             ctypes.c_int,
             ctypes.c_ssize_t,
-            ctypes.c_void_p]
+            ctypes.c_void_p,
+        ]
         lib.lua_pcallk.restype = ctypes.c_int
-        lib.lua_tolstring.argtypes = [
-            ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
+        lib.lua_tolstring.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
         lib.lua_tolstring.restype = ctypes.c_char_p
         lib.lua_close.argtypes = [ctypes.c_void_p]
         old_cwd = Path.cwd()

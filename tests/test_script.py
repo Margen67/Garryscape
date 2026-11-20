@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Test Git Bash orchestration with a fake compiler, not a real MDL compile."""
+
 import os
 import shutil
 import subprocess  # ruff: ignore[suspicious-subprocess-import]
@@ -59,45 +60,34 @@ class Script(unittest.TestCase):
         self.repo.mkdir()
         shutil.copy(REPO / "convert.sh", self.repo / "convert.sh")
         shutil.copy(REPO / "LICENSE", self.repo / "LICENSE")
-        shutil.copy(
-            REPO /
-            "rust-toolchain.toml",
-            self.repo /
-            "rust-toolchain.toml")
+        shutil.copy(REPO / "rust-toolchain.toml", self.repo / "rust-toolchain.toml")
         (self.repo / "addons/garryscape/lua/autorun/server").mkdir(parents=True)
         shutil.copy(
-            REPO /
-            "addons/garryscape/lua/autorun/server/garryscape_preview.lua",
-            self.repo /
-            "addons/garryscape/lua/autorun/server")
+            REPO / "addons/garryscape/lua/autorun/server/garryscape_preview.lua",
+            self.repo / "addons/garryscape/lua/autorun/server",
+        )
         (self.repo / "addons/garryscape/lua/autorun/client").mkdir(parents=True)
         (self.repo / "addons/garryscape/lua/garryscape").mkdir(parents=True)
         shutil.copy(
-            REPO /
-            "addons/garryscape/lua/autorun/client/garryscape_utilities.lua",
-            self.repo /
-            "addons/garryscape/lua/autorun/client")
+            REPO / "addons/garryscape/lua/autorun/client/garryscape_utilities.lua",
+            self.repo / "addons/garryscape/lua/autorun/client",
+        )
         shutil.copy(
-            REPO /
-            "addons/garryscape/lua/autorun/client/garryscape_shader.lua",
-            self.repo /
-            "addons/garryscape/lua/autorun/client")
+            REPO / "addons/garryscape/lua/autorun/client/garryscape_shader.lua",
+            self.repo / "addons/garryscape/lua/autorun/client",
+        )
         shutil.copy(
-            REPO /
-            "addons/garryscape/lua/garryscape/atlas_shader.lua",
-            self.repo /
-            "addons/garryscape/lua/garryscape")
+            REPO / "addons/garryscape/lua/garryscape/atlas_shader.lua",
+            self.repo / "addons/garryscape/lua/garryscape",
+        )
         (self.repo / "converter/target/release").mkdir(parents=True)
-        self.exe(
-            self.repo /
-            "converter/target/release/garryscape-convert",
-            CLI)
+        self.exe(self.repo / "converter/target/release/garryscape-convert", CLI)
         self.bin = self.path / "bin"
         self.bin.mkdir()
         self.exe(
             self.bin / "cargo",
             '#!/bin/sh\ntest "$PWD" = "$GARRYSCAPE_TEST_CARGO_ROOT" || exit 41\n'
-            'test -f rust-toolchain.toml || exit 42\nexit 0\n',
+            "test -f rust-toolchain.toml || exit 42\nexit 0\n",
         )
         self.compiler = self.path / "fake studiomdl.exe"
         self.exe(self.compiler, COMPILER)
@@ -108,14 +98,10 @@ class Script(unittest.TestCase):
         self.counter = self.path / "counter"
         self.env = dict(
             os.environ,
-            PATH=str(
-                self.bin) +
-            os.pathsep +
-            os.environ["PATH"],
-            COUNTER=str(
-                self.counter),
-            GARRYSCAPE_TEST_CARGO_ROOT=str(
-                self.repo))
+            PATH=str(self.bin) + os.pathsep + os.environ["PATH"],
+            COUNTER=str(self.counter),
+            GARRYSCAPE_TEST_CARGO_ROOT=str(self.repo),
+        )
 
     def tearDown(self) -> None:
         """Remove the fixture directory."""
@@ -128,7 +114,10 @@ class Script(unittest.TestCase):
         p.chmod(0o755)
 
     def run_script(
-        self, *extra: str, fail: str | None = None, default_addon: bool = False,
+        self,
+        *extra: str,
+        fail: str | None = None,
+        default_addon: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         """Run the conversion script with the current fixture.
 
@@ -139,7 +128,8 @@ class Script(unittest.TestCase):
         env = self.env.copy()
         if fail:
             env["FAIL_MODE"] = fail
-        args = [BASH,
+        args = [
+            BASH,
             str(self.repo / "convert.sh"),
             "regions",
             "50",
@@ -150,12 +140,13 @@ class Script(unittest.TestCase):
             str(self.compiler),
             "--output",
             "relative output",
-            *extra]
+            *extra,
+        ]
         if not default_addon:
             args += ["--addon", str(self.addon)]
         return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
-            args, env=env, cwd=self.path, check=False,
-                              text=True, capture_output=True)
+            args, env=env, cwd=self.path, check=False, text=True, capture_output=True
+        )
 
     def test_success_reuse_and_no_source_install(self) -> None:
         """Reuse a successful build and install only game files."""
@@ -171,44 +162,42 @@ class Script(unittest.TestCase):
         self.assertFalse(stale.exists())
         self.assertFalse((self.path / "relative output/build").exists())
         self.assertTrue(
-            (self.path / "relative output/2009scape/regions/50_50/compiled.json").is_file())
-        self.assertFalse(any(p.suffix in {".qc",
-            ".dmx",
-            ".glb",
-            ".gltf",
-            ".bin",
-            ".png",
-            ".webp"} for p in self.addon.rglob("*")))
-        self.assertTrue(
-            (self.addon / "lua/autorun/server/garryscape_preview.lua").is_file())
-        self.assertTrue(
-            (self.addon / "lua/autorun/client/garryscape_shader.lua").is_file())
-        self.assertTrue(
-            (self.addon / "lua/autorun/client/garryscape_utilities.lua").is_file())
-        self.assertTrue(
-            (self.addon / "lua/garryscape/atlas_shader.lua").is_file())
+            (self.path / "relative output/2009scape/regions/50_50/compiled.json").is_file()
+        )
+        self.assertFalse(
+            any(
+                p.suffix in {".qc", ".dmx", ".glb", ".gltf", ".bin", ".png", ".webp"}
+                for p in self.addon.rglob("*")
+            )
+        )
+        self.assertTrue((self.addon / "lua/autorun/server/garryscape_preview.lua").is_file())
+        self.assertTrue((self.addon / "lua/autorun/client/garryscape_shader.lua").is_file())
+        self.assertTrue((self.addon / "lua/autorun/client/garryscape_utilities.lua").is_file())
+        self.assertTrue((self.addon / "lua/garryscape/atlas_shader.lua").is_file())
 
     def test_default_installs_under_garrysmod_directory(self) -> None:
         """Resolve the default addon destination beneath garrysmod."""
         game = self.path / "Steam/GarrysMod"
         self.env["TEST_GAME_ROOT"] = str(game)
-        self.exe(self.bin / "cygpath", """#!/usr/bin/env python3
+        self.exe(
+            self.bin / "cygpath",
+            """#!/usr/bin/env python3
 import os,sys
 path=sys.argv[2]
 steam_install = 'C:/Program Files (x86)/Steam/steamapps/common/GarrysMod/'
 if sys.argv[1]=='-u' and path.startswith(steam_install):
  path=os.environ['TEST_GAME_ROOT']+'/'+path.split('/GarrysMod/',1)[1]
 print(path)
-""")
+""",
+        )
         r = self.run_script(default_addon=True)
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
         addon = game / "garrysmod/addons/garryscape"
+        self.assertTrue((addon / "models/garryscape/2009scape/regions/50_50.mdl").is_file())
         self.assertTrue(
-            (addon / "models/garryscape/2009scape/regions/50_50.mdl").is_file())
-        self.assertTrue(
-            (addon / "materials/models/garryscape/2009scape/regions/50_50.vtf").is_file())
-        self.assertTrue(
-            (addon / "lua/autorun/server/garryscape_preview.lua").is_file())
+            (addon / "materials/models/garryscape/2009scape/regions/50_50.vtf").is_file()
+        )
+        self.assertTrue((addon / "lua/autorun/server/garryscape_preview.lua").is_file())
         self.assertFalse((game / "addons/garryscape").exists())
 
     def test_rebuild_recompiles(self) -> None:
@@ -271,14 +260,16 @@ print(path)
         self.assertFalse(self.counter.exists())
         self.assertFalse(self.addon.exists())
         self.assertTrue(
-            (self.path /
-                "relative output/2009scape/regions/50_50/preview/50_50.webp").is_file())
+            (self.path / "relative output/2009scape/regions/50_50/preview/50_50.webp").is_file()
+        )
 
     def test_region_required(self) -> None:
         """Reject conversion without both region coordinates."""
         r = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
             [BASH, str(self.repo / "convert.sh"), "regions", "50"],
-            capture_output=True, text=True, check=False,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("Specify the region", r.stderr)
@@ -287,8 +278,7 @@ print(path)
         """Use the cache revision when the namespace is empty."""
         r = self.run_script("--name", "")
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
-        self.assertTrue(
-            (self.addon / "models/garryscape/530/regions/50_50.mdl").is_file())
+        self.assertTrue((self.addon / "models/garryscape/530/regions/50_50.mdl").is_file())
 
 
 if __name__ == "__main__":

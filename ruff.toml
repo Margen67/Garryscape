@@ -9,7 +9,11 @@ line-length = 100
 [lint]
 select = ["ALL"]
 # Keep D211 (no blank line before class docs) and D212 (summary on the first line).
-ignore = ["incorrect-blank-line-before-class", "multi-line-summary-second-line"]
+ignore = [
+    "incorrect-blank-line-before-class",
+    "multi-line-summary-second-line",
+    "missing-trailing-comma", # Ruff's formatter controls trailing commas.
+]
 
 [lint.flake8-copyright]
 # The existing SPDX identifier is the project's required license notice.
