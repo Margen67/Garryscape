@@ -1,0 +1,27 @@
+target-version = "py312"
+preview = true
+line-length = 100
+
+[per-file-target-version]
+# Official Blender 4.3 builds embed Python 3.11.
+"tools/preview_atlas.py" = "py311"
+
+[lint]
+select = ["ALL"]
+# Keep D211 (no blank line before class docs) and D212 (summary on the first line).
+ignore = ["incorrect-blank-line-before-class", "multi-line-summary-second-line"]
+
+[lint.flake8-copyright]
+# The existing SPDX identifier is the project's required license notice.
+notice-rgx = '# SPDX-License-Identifier: AGPL-3\.0-or-later'
+
+[lint.per-file-ignores]
+# These harnesses use the standard library's unittest assertions and skip API.
+"tests/test_*.py" = ["pytest-unittest-assertion", "pytest-unittest-raises-assertion"]
+# The standalone validator keeps related format checks together and compares binary constants.
+"tests/validate_region.py" = [
+    "assert", "magic-value-comparison", "complex-structure",
+    "too-many-branches", "too-many-locals", "too-many-statements",
+]
+# Blender runs this file as a standalone script with no package around it.
+"tools/preview_atlas.py" = ["implicit-namespace-package"]

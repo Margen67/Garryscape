@@ -46,6 +46,10 @@ jobs:
       - name: Check Rust formatting
         run: cargo fmt --manifest-path converter/Cargo.toml --all -- --check
 
+      - name: Lint Python with Ruff
+        if: matrix.profile == 'dev'
+        uses: astral-sh/ruff-action@main
+
       - name: Lint GLua
         if: matrix.profile == 'dev'
         run: |-
