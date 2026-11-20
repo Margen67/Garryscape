@@ -218,7 +218,7 @@ mod tests {
                 blend_address: 0,
             }],
             pixels: vec![
-                255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 10, 20, 30, 255,
+                255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 10, 20, 30, 0,
             ],
             materials: vec![crate::region::Surface {
                 rect: [0, 0, 2, 2],
@@ -249,6 +249,10 @@ mod tests {
             ))
             .join("fixture");
         write(&baked, &directory, "fixture").unwrap();
+        crate::export::write_webp(&baked, &directory, "fixture").unwrap();
+        let encoded = fs::read(directory.join("fixture.webp")).unwrap();
+        let decoded = webp::Decoder::new(&encoded).decode().unwrap();
+        assert_eq!(&*decoded, baked.pixels.as_slice());
         let document: Value =
             serde_json::from_slice(&fs::read(directory.join("fixture.gltf")).unwrap()).unwrap();
         assert_eq!(document["images"][0]["uri"], "fixture.webp");

@@ -4,48 +4,27 @@ pub(crate) mod dmx;
 pub(crate) mod gltf;
 pub(crate) mod vtf;
 use crate::region::RegionMesh;
-use anyhow::{ensure, Context as _, Result};
-use std::{
-    fs,
-    io::{BufWriter, ErrorKind, Write as _},
-    path::Path,
-    process::Command,
-};
+use anyhow::{anyhow, Context as _, Result};
+use std::{fs, io::ErrorKind, path::Path};
+use webp::{Encoder, WebPConfig};
 
-/// Encode the original RGBA pixels using cwebp's maximum lossless preset.
+/// Encode the original RGBA pixels using libwebp's maximum lossless settings.
 fn write_webp(baked: &RegionMesh, preview: &Path, id: &str) -> Result<()> {
-    let input = preview.join(".atlas-input.pam");
-    let result = (|| -> Result<()> {
-        let mut writer = BufWriter::new(fs::File::create(&input)?);
-        write!(
-            writer,
-            "P7\nWIDTH {}\nHEIGHT {}\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n",
-            baked.width, baked.height
-        )?;
-        writer.write_all(&baked.pixels)?;
-        writer.flush()?;
-        drop(writer);
-
-        let status = Command::new("cwebp")
-            .current_dir(preview)
-            .args([
-                "-quiet",
-                "-lossless",
-                "-z",
-                "9",
-                "-exact",
-                ".atlas-input.pam",
-                "-o",
-            ])
-            .arg(format!("{id}.webp"))
-            .status()
-            .context("Running cwebp. Install the WebP tools and add cwebp to PATH")?;
-        ensure!(status.success(), "cwebp failed: {status}");
-        Ok(())
-    })();
-    let cleanup = remove_generated_file(&input);
-    result?;
-    cleanup
+    let mut config = WebPConfig::new().map_err(|()| anyhow!("Could not initialize libwebp"))?;
+    // Match libwebp's lossless preset 9 and preserve RGB under zero alpha.
+    config.lossless = 1_i32;
+    config.method = 6_i32;
+    config.quality = 100.;
+    config.exact = 1_i32;
+    let encoder = Encoder::from_rgba(
+        &baked.pixels,
+        u32::try_from(baked.width)?,
+        u32::try_from(baked.height)?,
+    );
+    let atlas = encoder
+        .encode_advanced(&config)
+        .map_err(|error| anyhow!("Could not encode lossless WebP: {error:?}"))?;
+    fs::write(preview.join(format!("{id}.webp")), &*atlas).context("Writing the preview atlas")
 }
 
 /// Remove an old generated file if it exists.

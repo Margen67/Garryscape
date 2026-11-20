@@ -125,11 +125,9 @@ The native-image atlas is **1024×512**, about **2.67 MiB** as lossless RGBA8888
 with mipmaps, replacing the former 8192×8192 per-tile bake. The manifest records
 native image rectangles and CRCs so pixel preservation can be checked.
 
-Install [`cwebp`](https://developers.google.com/speed/webp/download) and add it
-to `PATH` for fresh conversions. The glTF preview requires
-`EXT_texture_webp`. The converter encodes lossless WebP at maximum compression
-and preserves RGB under fully transparent pixels. The Source VTF is produced
-separately.
+The glTF preview requires `EXT_texture_webp`. The converter's built-in
+encoder uses maximum lossless compression and preserves RGB under fully
+transparent pixels. The Source VTF is produced separately.
 
 ## Required model shader: EGSM
 
