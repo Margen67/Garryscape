@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Lossless RGBA8888 VTF 7.2. Full mip chain, generated once offline.
+//! Lossless RGBA8888 VTF 7.5. Full mip chain, generated once offline.
 use crate::region::RegionMesh;
 use anyhow::{Context as _, Result};
 use std::{
@@ -31,11 +31,11 @@ pub(crate) fn write(baked: &RegionMesh, path: &Path) -> Result<()> {
         height = (height / 2).max(1);
         previous = levels.last().context("Missing generated mip level")?;
     }
-    let mut header = [0_u8; 80];
+    let mut header = [0_u8; 88];
     header[..4].copy_from_slice(b"VTF\0");
     header[4..8].copy_from_slice(&7_u32.to_le_bytes());
-    header[8..12].copy_from_slice(&2_u32.to_le_bytes());
-    header[12..16].copy_from_slice(&80_u32.to_le_bytes());
+    header[8..12].copy_from_slice(&5_u32.to_le_bytes());
+    header[12..16].copy_from_slice(&88_u32.to_le_bytes());
     header[16..18].copy_from_slice(&(baked.width as u16).to_le_bytes());
     header[18..20].copy_from_slice(&(baked.height as u16).to_le_bytes());
     // Control bytes share the albedo atlas. Texture-detail/picmip reduction
@@ -48,6 +48,10 @@ pub(crate) fn write(baked: &RegionMesh, path: &Path) -> Result<()> {
     header[56] = (levels.len() + 1) as u8;
     header[57..61].copy_from_slice(&u32::MAX.to_le_bytes());
     header[63..65].copy_from_slice(&1_u16.to_le_bytes());
+    // One resource: the high-resolution image, including all mip levels.
+    header[68..72].copy_from_slice(&1_u32.to_le_bytes());
+    header[80..84].copy_from_slice(&[0x30, 0, 0, 0]);
+    header[84..88].copy_from_slice(&88_u32.to_le_bytes());
     let mut output = BufWriter::new(File::create(path)?);
     output.write_all(&header)?;
     for level in levels.iter().rev() {

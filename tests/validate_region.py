@@ -75,13 +75,19 @@ def validate(root):
     textures = list(materials.glob('*.vtf'))
     assert len(textures) == 1
     with textures[0].open('rb') as stream:
-        header = stream.read(80)
-    assert header[:4] == b'VTF\0' and struct.unpack_from('<II', header, 4) == (7, 2)
+        header = stream.read(88)
+    assert header[:4] == b'VTF\0' and struct.unpack_from('<II', header, 4) == (7, 5)
+    header_size, = struct.unpack_from('<I', header, 12)
+    assert header_size == 88
+    assert struct.unpack_from('<I', header, 68) == (1,)
+    assert header[80:84] == b'\x30\x00\x00\x00'
+    image_offset, = struct.unpack_from('<I', header, 84)
+    assert image_offset == header_size
     width, height = struct.unpack_from('<HH', header, 16)
     assert (width, height) == (manifest['atlasWidth'], manifest['atlasHeight'])
     assert width >= 2 and height >= 2 and width & (width-1) == height & (height-1) == 0
     assert header[56] == max(width, height).bit_length()
-    assert textures[0].stat().st_size == 80 + sum(4 * max(width >> i, 1) * max(height >> i, 1) for i in range(header[56]))
+    assert textures[0].stat().st_size == image_offset + sum(4 * max(width >> i, 1) * max(height >> i, 1) for i in range(header[56]))
     base = textures[0].read_bytes()[-width*height*4:]
     for image in manifest['atlasImages']:
         x,y,w,h = image['rect']
