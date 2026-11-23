@@ -1,5 +1,6 @@
 {
     "runtime.version": "LuaJIT",
+    "type.castNumberToInteger": false,
     "runtime.nonstandardSymbol": ["!", "!=", "&&", "||", "//", "/**/", "continue"],
     "diagnostics.groupFileStatus": {
         "unused": "Any",
