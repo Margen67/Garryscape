@@ -245,9 +245,8 @@ run `glualint lint addons tests` from the repository root. The linter reads
 `glualint.json` automatically.
 
 The GMod LuaLS workflow uses Garry's Mod API definitions and checks all source
-files with the warning groups in `.luarc.json`. GLuaFixer handles formatting.
-LuaLS's `codestyle-check` is disabled because its brace spacing conflicts with
-the GLuaFixer configuration. LuaLS annotates warnings and fails on errors.
+files with the warning groups in `.luarc.json`. LuaLS's table brace spacing
+matches GLuaFixer. LuaLS annotates warnings and fails on errors.
 
 Run `ruff check .` to lint Python and `ruff format .` to apply formatting.
 Windows CI runs linting and `ruff format --check .` using `ruff.toml`.

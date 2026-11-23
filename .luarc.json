@@ -16,7 +16,6 @@
         "duplicate": "Any",
         "strict": "Any"
     },
-    "diagnostics.disable": ["codestyle-check"],
     "diagnostics.globals": [
         "EGSM",
         "shaderlib",
