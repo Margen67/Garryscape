@@ -1,0 +1,13 @@
+name: GMod LuaLS
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  luals:
+    uses: CFC-Servers/gmod_luals_workflow/.github/workflows/luals.yml@main
