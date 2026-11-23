@@ -22,26 +22,30 @@ def parse_dmx(path: Path) -> set[str]:
     assert text.startswith("<!-- dmx encoding keyvalues2 1 format model 1 -->")
     tokens = re.findall(r'"(?:\\.|[^"\\])*"|[{}\[\],]', text)
     it = iter(tokens)
-    elements = {}
+    elements: dict[str, tuple[str, dict[str, tuple[str, str | list[str]]]]] = {}
     for kind in it:
         assert next(it) == "{"
-        fields = {}
+        fields: dict[str, tuple[str, str | list[str]]] = {}
         while (key := next(it)) != "}":
-            field_type, value = next(it), next(it)
-            if value == "[":
-                value = []
+            field_type, field_value = next(it), next(it)
+            value: str | list[str]
+            if field_value == "[":
+                parts: list[str] = []
                 while (part := next(it)) != "]":
                     if part != ",":
-                        value.append(part.strip('"'))
+                        parts.append(part.strip('"'))
+                value = parts
             else:
-                value = value.strip('"')
+                value = field_value.strip('"')
             fields[key.strip('"')] = (field_type.strip('"'), value)
         uid = fields["id"][1]
+        assert isinstance(uid, str)
         assert uid not in elements, "duplicate element id"
         elements[uid] = (kind.strip('"'), fields)
     for kind, fields in elements.values():
         for field_type, value in fields.values():
             if field_type == "element":
+                assert isinstance(value, str)
                 assert value in elements, ("missing reference", value)
             if field_type == "element_array":
                 assert len(value) % 2 == 0
@@ -84,7 +88,7 @@ def validate(root: str | Path) -> None:
     assert manifest["textureCount"] == 1
     assert all(v > 0 for v in manifest["trianglesPerFloor"])
     source = root / f"source/garryscape/{namespace}/regions/{region}"
-    ids = set()
+    ids: set[str] = set()
     for path in sorted(source.glob("reference_*.dmx")):
         group = parse_dmx(path)
         assert not ids.intersection(group), "DMX bodies share UUIDs"
@@ -143,7 +147,7 @@ def validate(root: str | Path) -> None:
         linear = encoded / 12.92 if encoded <= 0.04045 else ((encoded + 0.055) / 1.055) ** 2.4
         restored = linear * 12.92 if linear <= 0.0031308 else 1.055 * linear ** (1 / 2.4) - 0.055
         assert round(restored * 255) == byte
-    checked = set()
+    checked: set[int] = set()
     for cell, plan in enumerate(blend["grid"]):
         pointer = address(control(cell))
         if plan == 0:
@@ -249,7 +253,7 @@ def validate(root: str | Path) -> None:
         cross_y = ab[2] * ac[0] - ab[0] * ac[2]
         assert cross_y > 0, "backface or degenerate terrain face"
     print(  # ruff: ignore[print]
-        f"PASS: {count} triangles, four floors, one texture, "
+        f"PASS: {count} triangles, four floors, one texture,",
         "valid DMX graph/mips/winding, no collision",
     )
 

@@ -13,6 +13,7 @@ import subprocess  # ruff: ignore[suspicious-subprocess-import] -- Runs the expl
 import tempfile
 import unittest
 from pathlib import Path
+from typing import override
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -21,6 +22,7 @@ class HlslCompilation(unittest.TestCase):
     """Check compiled Shader Model 3 variants and register bounds."""
 
     @classmethod
+    @override
     def setUpClass(cls) -> None:
         """Load the configured compiler and extract the embedded shaders.
 
@@ -48,7 +50,7 @@ class HlslCompilation(unittest.TestCase):
         """Compile and validate all variants of the given shader stage."""
         with tempfile.TemporaryDirectory(prefix="garryscape hlsl ") as folder:
             source = Path(folder) / (stage + ".hlsl")
-            source.write_text(self.stages[stage])
+            _ = source.write_text(self.stages[stage])
             # The test operator explicitly selects the compiler.
             result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
                 [self.compiler, str(source), profile, self.includes, "all"],
@@ -75,4 +77,4 @@ class HlslCompilation(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    _ = unittest.main()

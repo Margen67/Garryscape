@@ -8,6 +8,8 @@ line-length = 100
 
 [lint]
 select = ["ALL"]
+# Include preview rules through ALL without naming each one.
+explicit-preview-rules = false
 # Keep D211 (no blank line before class docs) and D212 (summary on the first line).
 ignore = [
     "incorrect-blank-line-before-class",

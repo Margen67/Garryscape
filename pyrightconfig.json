@@ -4,11 +4,21 @@
         "tools"
     ],
     "pythonVersion": "3.12",
-    "typeCheckingMode": "standard",
+    "typeCheckingMode": "strict",
     "executionEnvironments": [
         {
             "root": "tools",
             "pythonVersion": "3.11"
         }
-    ]
+    ],
+    "reportPropertyTypeMismatch": "error",
+    "reportImportCycles": "error",
+    "reportMissingSuperCall": "error",
+    "reportUninitializedInstanceVariable": "error",
+    "reportCallInDefaultInitializer": "error",
+    "reportImplicitStringConcatenation": "error",
+    "reportUnusedCallResult": "error",
+    "reportUnnecessaryTypeIgnoreComment": "error",
+    "reportUnreachable": "error",
+    "reportImplicitOverride": "error"
 }

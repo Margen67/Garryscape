@@ -8,6 +8,7 @@ import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import tempfile
 import unittest
 from pathlib import Path
+from typing import override
 
 BASH = shutil.which("bash") or "bash"
 
@@ -52,31 +53,43 @@ for suffix in ['mdl','vvd','dx90.vtx']:p.with_suffix('.'+suffix).write_text('com
 class Script(unittest.TestCase):
     """Check converter and compiler orchestration in a temporary install."""
 
+    # unittest calls setUp before each test, which initializes these fixtures.
+    tmp: tempfile.TemporaryDirectory[str]  # pyright: ignore[reportUninitializedInstanceVariable]
+    path: Path  # pyright: ignore[reportUninitializedInstanceVariable]
+    repo: Path  # pyright: ignore[reportUninitializedInstanceVariable]
+    bin: Path  # pyright: ignore[reportUninitializedInstanceVariable]
+    compiler: Path  # pyright: ignore[reportUninitializedInstanceVariable]
+    cache: Path  # pyright: ignore[reportUninitializedInstanceVariable]
+    addon: Path  # pyright: ignore[reportUninitializedInstanceVariable]
+    counter: Path  # pyright: ignore[reportUninitializedInstanceVariable]
+    env: dict[str, str]  # pyright: ignore[reportUninitializedInstanceVariable]
+
+    @override
     def setUp(self) -> None:
         """Create an isolated checkout, cache, and compiler fixture."""
         self.tmp = tempfile.TemporaryDirectory(prefix="garryscape script ")
         self.path = Path(self.tmp.name)
         self.repo = self.path / "repo with spaces"
         self.repo.mkdir()
-        shutil.copy(REPO / "convert.sh", self.repo / "convert.sh")
-        shutil.copy(REPO / "LICENSE", self.repo / "LICENSE")
-        shutil.copy(REPO / "rust-toolchain.toml", self.repo / "rust-toolchain.toml")
+        _ = shutil.copy(REPO / "convert.sh", self.repo / "convert.sh")
+        _ = shutil.copy(REPO / "LICENSE", self.repo / "LICENSE")
+        _ = shutil.copy(REPO / "rust-toolchain.toml", self.repo / "rust-toolchain.toml")
         (self.repo / "addons/garryscape/lua/autorun/server").mkdir(parents=True)
-        shutil.copy(
+        _ = shutil.copy(
             REPO / "addons/garryscape/lua/autorun/server/garryscape_preview.lua",
             self.repo / "addons/garryscape/lua/autorun/server",
         )
         (self.repo / "addons/garryscape/lua/autorun/client").mkdir(parents=True)
         (self.repo / "addons/garryscape/lua/garryscape").mkdir(parents=True)
-        shutil.copy(
+        _ = shutil.copy(
             REPO / "addons/garryscape/lua/autorun/client/garryscape_utilities.lua",
             self.repo / "addons/garryscape/lua/autorun/client",
         )
-        shutil.copy(
+        _ = shutil.copy(
             REPO / "addons/garryscape/lua/autorun/client/garryscape_shader.lua",
             self.repo / "addons/garryscape/lua/autorun/client",
         )
-        shutil.copy(
+        _ = shutil.copy(
             REPO / "addons/garryscape/lua/garryscape/atlas_shader.lua",
             self.repo / "addons/garryscape/lua/garryscape",
         )
@@ -86,14 +99,17 @@ class Script(unittest.TestCase):
         self.bin.mkdir()
         self.exe(
             self.bin / "cargo",
-            '#!/bin/sh\ntest "$PWD" = "$GARRYSCAPE_TEST_CARGO_ROOT" || exit 41\n'
-            "test -f rust-toolchain.toml || exit 42\nexit 0\n",
+            """#!/bin/sh
+test "$PWD" = "$GARRYSCAPE_TEST_CARGO_ROOT" || exit 41
+test -f rust-toolchain.toml || exit 42
+exit 0
+""",
         )
         self.compiler = self.path / "fake studiomdl.exe"
         self.exe(self.compiler, COMPILER)
         self.cache = self.path / "cache"
         self.cache.mkdir()
-        (self.cache / "main_file_cache.dat2").write_bytes(b"cache")
+        _ = (self.cache / "main_file_cache.dat2").write_bytes(b"cache")
         self.addon = self.path / "installed addon"
         self.counter = self.path / "counter"
         self.env = dict(
@@ -103,6 +119,7 @@ class Script(unittest.TestCase):
             GARRYSCAPE_TEST_CARGO_ROOT=str(self.repo),
         )
 
+    @override
     def tearDown(self) -> None:
         """Remove the fixture directory."""
         self.tmp.cleanup()
@@ -110,7 +127,7 @@ class Script(unittest.TestCase):
     @staticmethod
     def exe(p: Path, text: str) -> None:
         """Write an executable test fixture."""
-        p.write_text(text, encoding="utf-8")
+        _ = p.write_text(text, encoding="utf-8")
         p.chmod(0o755)
 
     def run_script(
@@ -154,7 +171,7 @@ class Script(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
         model = self.addon / "models/garryscape/2009scape/regions/50_50.mdl"
         stale = self.addon / "old file.txt"
-        stale.write_text("stale")
+        _ = stale.write_text("stale")
         r = self.run_script()
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
         self.assertEqual(self.counter.read_text().count("compile"), 1)
@@ -228,7 +245,7 @@ print(path)
         """Keep the installed addon after a compiler failure."""
         self.assertEqual(self.run_script().returncode, 0)
         marker = self.addon / "keep.txt"
-        marker.write_text("previous installation")
+        _ = marker.write_text("previous installation")
         for mode in ["exit", "message", "nothing"]:
             r = self.run_script("--rebuild", fail=mode)
             self.assertNotEqual(r.returncode, 0)
@@ -238,7 +255,7 @@ print(path)
         """Keep the installed addon after a staging failure."""
         self.assertEqual(self.run_script().returncode, 0)
         marker = self.addon / "keep.txt"
-        marker.write_text("previous installation")
+        _ = marker.write_text("previous installation")
         (self.repo / "LICENSE").unlink()
         r = self.run_script()
         self.assertNotEqual(r.returncode, 0)
@@ -282,4 +299,4 @@ print(path)
 
 
 if __name__ == "__main__":
-    unittest.main()
+    _ = unittest.main()

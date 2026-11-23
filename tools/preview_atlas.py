@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Literal, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 JsonObject: TypeAlias = dict[str, Any]
 SocketValue: TypeAlias = "bpy.types.NodeSocket | float"
@@ -58,7 +61,8 @@ except ModuleNotFoundError as error:
 
 editor = bpy.context.space_data
 if isinstance(editor, bpy.types.SpaceTextEditor) and editor.text and editor.text.filepath:
-    folder = Path(bpy.path.abspath(editor.text.filepath)).resolve().parent
+    # The Blender stubs omit types on optional abspath parameters.
+    folder = Path(bpy.path.abspath(editor.text.filepath)).resolve().parent  # pyright: ignore[reportUnknownMemberType]
 else:
     folder = Path(__file__).resolve().parent
 paths = list(folder.glob("*.gltf"))
@@ -66,7 +70,7 @@ if len(paths) != 1:
     msg = "Expected one glTF in the preview directory"
     raise RuntimeError(msg)
 path = paths[0]
-doc = json.loads(path.read_text())
+doc: JsonObject = json.loads(path.read_text())
 startup_types = {"Camera": "CAMERA", "Cube": "MESH", "Light": "LIGHT"}
 scene = cast("bpy.types.Scene | None", bpy.context.scene)
 startup_objects = tuple(scene.objects) if scene is not None else ()
@@ -125,7 +129,7 @@ def native_color(  # ruff: ignore[too-many-locals, too-many-statements]
     else:
         flipped = False
     separate = nodes.new("ShaderNodeSeparateXYZ")
-    links.new(source_uv, separate.inputs[0])
+    _ = links.new(source_uv, separate.inputs[0])
 
     def math(
         operation: MathOperation, a: SocketValue, b: SocketValue | None = None
@@ -136,7 +140,7 @@ def native_color(  # ruff: ignore[too-many-locals, too-many-statements]
             if isinstance(v, (int, float)):
                 cast("bpy.types.NodeSocketFloat", _input_socket(node, i)).default_value = v
             else:
-                links.new(v, _input_socket(node, i))
+                _ = links.new(v, _input_socket(node, i))
         return _output_socket(node, 0)
 
     # Blender's glTF importer flips V into Blender UV convention. Recover the
@@ -155,8 +159,8 @@ def native_color(  # ruff: ignore[too-many-locals, too-many-statements]
     fy = math("FRACT", v)
     ix = math("FLOOR", u)
     iy = math("FLOOR", v)
-    samples = []
-    weights = []
+    samples: list[bpy.types.NodeSocket] = []
+    weights: list[bpy.types.NodeSocket] = []
     for dy in range(2):
         for dx in range(2):
             px = math("FLOORED_MODULO", math("ADD", ix, dx), w)
@@ -164,13 +168,13 @@ def native_color(  # ruff: ignore[too-many-locals, too-many-statements]
             au = math("DIVIDE", math("ADD", px, x + 0.5), width)
             av = math("SUBTRACT", 1, math("DIVIDE", math("ADD", py, y + 0.5), height))
             combine = nodes.new("ShaderNodeCombineXYZ")
-            links.new(au, combine.inputs[0])
-            links.new(av, combine.inputs[1])
+            _ = links.new(au, combine.inputs[0])
+            _ = links.new(av, combine.inputs[1])
             image = cast("bpy.types.ShaderNodeTexImage", nodes.new("ShaderNodeTexImage"))
             image.image = atlas
             image.interpolation = "Closest"
             image.extension = "EXTEND"
-            links.new(combine.outputs[0], _input_socket(image, "Vector"))
+            _ = links.new(combine.outputs[0], _input_socket(image, "Vector"))
             weight = math(
                 "MULTIPLY",
                 fx if dx else math("SUBTRACT", 1, fx),
@@ -178,22 +182,22 @@ def native_color(  # ruff: ignore[too-many-locals, too-many-statements]
             )
             multiply = cast("bpy.types.ShaderNodeVectorMath", nodes.new("ShaderNodeVectorMath"))
             multiply.operation = "SCALE"
-            links.new(_output_socket(image, "Color"), _input_socket(multiply, 0))
-            links.new(weight, _input_socket(multiply, "Scale"))
+            _ = links.new(_output_socket(image, "Color"), _input_socket(multiply, 0))
+            _ = links.new(weight, _input_socket(multiply, "Scale"))
             samples.append(_output_socket(multiply, "Vector"))
             weights.append(math("MULTIPLY", _output_socket(image, "Alpha"), weight))
 
     def add_vectors(a: bpy.types.NodeSocket, b: bpy.types.NodeSocket) -> bpy.types.NodeSocket:
         node = cast("bpy.types.ShaderNodeVectorMath", nodes.new("ShaderNodeVectorMath"))
         node.operation = "ADD"
-        links.new(a, _input_socket(node, 0))
-        links.new(b, _input_socket(node, 1))
+        _ = links.new(a, _input_socket(node, 0))
+        _ = links.new(b, _input_socket(node, 1))
         return _output_socket(node, "Vector")
 
     result = add_vectors(add_vectors(samples[0], samples[1]), add_vectors(samples[2], samples[3]))
     multiply = cast("bpy.types.ShaderNodeVectorMath", nodes.new("ShaderNodeVectorMath"))
     multiply.operation = "MULTIPLY"
-    links.new(result, _input_socket(multiply, 0))
+    _ = links.new(result, _input_socket(multiply, 0))
     cast("bpy.types.NodeSocketVector", _input_socket(multiply, 1)).default_value = tint[:3]
     alpha = math("ADD", math("ADD", weights[0], weights[1]), math("ADD", weights[2], weights[3]))
     return _output_socket(multiply, "Vector"), math("MULTIPLY", alpha, tint[3])
@@ -217,22 +221,25 @@ def apply_material(material: bpy.types.Material, entry: JsonObject) -> None:
     output = tree.nodes.new("ShaderNodeOutputMaterial")
     bsdf = tree.nodes.new("ShaderNodeBsdfPrincipled")
     cast("bpy.types.NodeSocketFloat", bsdf.inputs["Roughness"]).default_value = 1
-    tree.links.new(bsdf.outputs["BSDF"], output.inputs["Surface"])
+    _ = tree.links.new(bsdf.outputs["BSDF"], output.inputs["Surface"])
     color, alpha = native_color(tree, entry)
-    tree.links.new(color, bsdf.inputs["Base Color"])
+    _ = tree.links.new(color, bsdf.inputs["Base Color"])
     if entry.get("alphaMode") == "BLEND" and not isinstance(alpha, (int, float)):
-        tree.links.new(alpha, bsdf.inputs["Alpha"])
+        _ = tree.links.new(alpha, bsdf.inputs["Alpha"])
 
 
 # The import may append suffixes to existing material names; pair by
 # imported slots.
 meshes = [obj.data for obj in objects if isinstance(obj.data, bpy.types.Mesh)]
 materials = {material for mesh in meshes for material in mesh.materials if material is not None}
+atlas_bindings: dict[str, int] = {}
 for material in materials:
-    binding = (material.get("garryscapeAtlas") or {}).get("binding")
+    metadata = cast("JsonObject | None", material.get("garryscapeAtlas"))
+    binding = metadata.get("binding") if metadata is not None else None
     if binding is None:
         raise RuntimeError("Imported atlas metadata missing: " + material.name)
-    apply_material(material, doc["materials"][int(binding)])
+    atlas_bindings[material.name] = int(binding)
+    apply_material(material, doc["materials"][atlas_bindings[material.name]])
 # Reuse analytic mask and native-image node groups across all terrain materials.
 # No terrain geometry or source texture is rasterized for the preview.
 blend_path = folder / "ground_blending.json"
@@ -242,16 +249,16 @@ if blend_path.exists():
     controls = json.loads(blend_path.read_text())
     blending = controls["blending"]
     mapping = controls["mapping"]
-    mask_groups = {}
-    image_groups = {}
-    blend_materials = {}
+    mask_groups: dict[str, bpy.types.ShaderNodeTree] = {}
+    image_groups: dict[int, bpy.types.ShaderNodeTree] = {}
+    blend_materials: dict[tuple[str, int, str], bpy.types.Material] = {}
 
     def assign(tree: bpy.types.NodeTree, value: SocketValue, socket: bpy.types.NodeSocket) -> None:
         """Set a socket from a constant or an existing node output."""
         if isinstance(value, (int, float)):
             cast("bpy.types.NodeSocketFloat", socket).default_value = value
         else:
-            tree.links.new(value, socket)
+            _ = tree.links.new(value, socket)
 
     def calc(
         tree: bpy.types.NodeTree,
@@ -295,12 +302,12 @@ if blend_path.exists():
         if interface is None:
             msg = "Blender did not create a shader group interface"
             raise RuntimeError(msg)
-        interface.new_socket(name="XY", in_out="INPUT", socket_type="NodeSocketVector")
-        interface.new_socket(name="Result", in_out="OUTPUT", socket_type=output_type)
+        _ = interface.new_socket(name="XY", in_out="INPUT", socket_type="NodeSocketVector")
+        _ = interface.new_socket(name="Result", in_out="OUTPUT", socket_type=output_type)
         inp = g.nodes.new("NodeGroupInput")
         out = g.nodes.new("NodeGroupOutput")
         xy = g.nodes.new("ShaderNodeSeparateXYZ")
-        g.links.new(inp.outputs[0], xy.inputs[0])
+        _ = g.links.new(inp.outputs[0], xy.inputs[0])
         return g, xy, out
 
     def mask_group(triangles: list[list[list[int]]]) -> bpy.types.ShaderNodeTree:
@@ -376,7 +383,7 @@ if blend_path.exists():
                 calc(g, "DIVIDE", xy.outputs[i], f["scale"]),
                 (mapping[i + 2] / f["scale"]) % 1,
             )
-            g.links.new(value, _input_socket(uv, i))
+            _ = g.links.new(value, _input_socket(uv, i))
         entry = {
             "extras": {
                 "garryscapeAtlas": {
@@ -389,7 +396,7 @@ if blend_path.exists():
             "pbrMetallicRoughness": {"baseColorFactor": f["tint"]},
         }
         color, _ = native_color(g, entry, _output_socket(uv, 0))
-        g.links.new(color, out.inputs[0])
+        _ = g.links.new(color, out.inputs[0])
         image_groups[floor_id] = g
         return g
 
@@ -418,12 +425,18 @@ if blend_path.exists():
             raise RuntimeError(msg)
         nodes = tree.nodes
         links = tree.links
-        bsdf = next(n for n in nodes if n.type == "BSDF_PRINCIPLED")
-        color = bsdf.inputs["Base Color"].links[0].from_socket
+        bsdf = next(n for n in nodes if isinstance(n, bpy.types.ShaderNodeBsdfPrincipled))
+        base_color = _input_socket(bsdf, "Base Color")
+        # Blender collection stubs leave indexed links untyped.
+        color_links = cast("Sequence[bpy.types.NodeLink]", base_color.links)
+        color = color_links[0].from_socket
+        if color is None:
+            msg = "Copied atlas material is missing its base color link"
+            raise RuntimeError(msg)
         uv = cast("bpy.types.ShaderNodeUVMap", nodes.new("ShaderNodeUVMap"))
         uv.uv_map = uv_name
         xy = nodes.new("ShaderNodeSeparateXYZ")
-        links.new(_output_socket(uv, 0), xy.inputs[0])
+        _ = links.new(_output_socket(uv, 0), xy.inputs[0])
         y = calc(tree, "SUBTRACT", 1, xy.outputs["Y"])
         layer = calc(tree, "FLOOR", calc(tree, "DIVIDE", y, 128))
         values = [
@@ -435,30 +448,30 @@ if blend_path.exists():
         terrain = nodes.new("ShaderNodeCombineXYZ")
         local = nodes.new("ShaderNodeCombineXYZ")
         for i, value in enumerate(values):
-            links.new(value, terrain.inputs[i])
+            _ = links.new(value, terrain.inputs[i])
             tile = calc(
                 tree,
                 "MINIMUM",
                 63,
                 calc(tree, "MAXIMUM", 0, calc(tree, "FLOOR", calc(tree, "DIVIDE", value, 128))),
             )
-            links.new(
+            _ = links.new(
                 calc(tree, "SUBTRACT", value, calc(tree, "MULTIPLY", tile, 128)), local.inputs[i]
             )
         for layer_plan in blending["plans"][index]:
             mask = cast("bpy.types.ShaderNodeGroup", nodes.new("ShaderNodeGroup"))
             mask.node_tree = mask_group(layer_plan["triangles"])
-            links.new(local.outputs[0], mask.inputs[0])
+            _ = links.new(local.outputs[0], mask.inputs[0])
             image = cast("bpy.types.ShaderNodeGroup", nodes.new("ShaderNodeGroup"))
             image.node_tree = image_group(layer_plan["floor"])
-            links.new(terrain.outputs[0], _input_socket(image, 0))
+            _ = links.new(terrain.outputs[0], _input_socket(image, 0))
             mix = cast("bpy.types.ShaderNodeMixRGB", nodes.new("ShaderNodeMixRGB"))
             mix.blend_type = "MIX"
-            links.new(mask.outputs[0], _input_socket(mix, 0))
-            links.new(color, _input_socket(mix, 1))
-            links.new(_output_socket(image, 0), _input_socket(mix, 2))
+            _ = links.new(mask.outputs[0], _input_socket(mix, 0))
+            _ = links.new(color, _input_socket(mix, 1))
+            _ = links.new(_output_socket(image, 0), _input_socket(mix, 2))
             color = _output_socket(mix, 0)
-        links.new(color, bsdf.inputs["Base Color"])
+        _ = links.new(color, base_color)
         blend_materials[key] = material
         return material
 
@@ -466,19 +479,17 @@ if blend_path.exists():
         if len(mesh.uv_layers) <= TERRAIN_UV_LAYER:
             continue
         uv_layer = mesh.uv_layers[TERRAIN_UV_LAYER]
-        slots = {}
+        # Blender collection stubs return an unknown type when indexed.
+        uv_data = cast("Sequence[bpy.types.Float2AttributeValue]", uv_layer.uv)
+        slots: dict[str, int] = {}
         for poly in mesh.polygons:
             base = mesh.materials[poly.material_index]
             if base is None:
                 continue
-            if (
-                doc["materials"][int((base.get("garryscapeAtlas") or {}).get("binding", 0))].get(
-                    "alphaMode"
-                )
-                == "BLEND"
-            ):
+            if doc["materials"][atlas_bindings[base.name]].get("alphaMode") == "BLEND":
                 continue
-            coords = [uv_layer.data[i].uv for i in poly.loop_indices]
+            loop_indices = cast("Sequence[int]", poly.loop_indices)
+            coords = [uv_data[i].vector for i in loop_indices]
             x = sum(v.x for v in coords) / len(coords)
             y = sum(1 - v.y for v in coords) / len(coords)
             layer = pymath.floor(y / 128)
@@ -519,7 +530,8 @@ if not bpy.app.background and screen is not None:
             space.shading.type = "MATERIAL"
             region = next((r for r in area.regions if r.type == "WINDOW"), None)
             if region:
-                with bpy.context.temp_override(area=area, region=region):
+                # The Blender stubs leave the override keyword arguments untyped.
+                with bpy.context.temp_override(area=area, region=region):  # pyright: ignore[reportUnknownMemberType]
                     bpy.ops.view3d.view_selected(use_all_regions=False)
 
 # This status is visible when Blender is launched from a terminal.
