@@ -8,13 +8,20 @@ on:
 permissions:
   contents: read
 
+env:
+  POWERSHELL_TELEMETRY_OPTOUT: "1"
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
+
   converter:
-    name: Rust checks and converter (Windows x64, ${{ matrix.profile }})
+    name: Build converter (Windows x64, ${{ matrix.profile }})
+    needs: checks
     runs-on: windows-latest
     timeout-minutes: 30
     strategy:
@@ -43,39 +50,6 @@ jobs:
           }
           cargo --version
 
-      - name: Check Rust formatting
-        run: cargo fmt --manifest-path converter/Cargo.toml --all -- --check
-
-      - name: Lint Python with Ruff
-        if: matrix.profile == 'dev'
-        uses: astral-sh/ruff-action@main
-
-      - name: Check Python formatting
-        if: matrix.profile == 'dev'
-        run: ruff format --check .
-
-      - name: Lint GLua
-        if: matrix.profile == 'dev'
-        run: |-
-          $glualintDir = Join-Path $env:RUNNER_TEMP 'glualint'
-          $archive = "$glualintDir.zip"
-          $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/FPtje/GLuaFixer/releases/latest'
-          $asset = $release.assets | Where-Object { $_.name -like 'glualint-*-x86_64-windows.zip' }
-          if (@($asset).Count -ne 1) {
-            throw "Expected one Windows x64 archive in GLuaFixer release $($release.tag_name)."
-          }
-          Write-Host "Using GLuaFixer $($release.tag_name)"
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $archive
-          Expand-Archive -Path $archive -DestinationPath $glualintDir
-          & (Join-Path $glualintDir 'glualint.exe') lint addons tests
-
-      - name: Run all enabled Clippy checks
-        # Compatible checks are strict; source-scoped exceptions document native math.
-        run: cargo clippy --locked --manifest-path converter/Cargo.toml --all-targets --profile ${{ matrix.profile }} --target x86_64-pc-windows-msvc --message-format=short -- -D warnings
-
-      - name: Run Rust tests
-        run: cargo test --locked --manifest-path converter/Cargo.toml --all-targets --profile ${{ matrix.profile }} --target x86_64-pc-windows-msvc --message-format=short
-
       - name: Build converter
         run: cargo build --locked --profile ${{ matrix.profile }} --manifest-path converter/Cargo.toml --target x86_64-pc-windows-msvc --message-format=short
 
@@ -91,12 +65,3 @@ jobs:
           path: converter/target/x86_64-pc-windows-msvc/release/garryscape-convert-windows-x64.7z
           archive: false
           if-no-files-found: error
-
-      - name: Install crate update checker
-        if: matrix.profile == 'dev'
-        run: cargo install cargo-outdated --locked
-
-      - name: Report available crate updates
-        if: matrix.profile == 'dev'
-        working-directory: converter
-        run: cargo outdated

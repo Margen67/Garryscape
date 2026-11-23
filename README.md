@@ -251,12 +251,12 @@ matches GLuaFixer. LuaLS annotates warnings and fails on errors.
 Run `ruff check .` to lint Python and `ruff format .` to apply formatting.
 Windows CI runs linting and `ruff format --check .` using `ruff.toml`.
 
-GitHub Actions runs these checks on **Windows x64 only** using the pinned
-nightly toolchain, with a matrix for debug (`dev`) and optimized (`release`)
-profiles. Both profiles run Clippy, tests and builds. Formatting differences and
-build/test/lint errors fail the workflow, including every unsuppressed compiler
-and Clippy warning. Only the release build uploads the CLI as the
-**garryscape-convert-windows-x64.7z** artifact. `convert.sh` also builds and runs
+The reusable Checks workflow runs formatting, linting, dependency update
+reporting, and Rust tests. It checks both Cargo profiles on Windows x64 with
+the pinned nightly toolchain and runs GMod LuaLS through the upstream workflow
+on Ubuntu. The Windows x64 build waits for Checks to pass, then builds the
+debug (`dev`) and optimized (`release`) profiles. Only the release build
+uploads **garryscape-convert-windows-x64.7z**. `convert.sh` builds and runs
 the optimized release converter.
 No RuneScape cache or compiled game assets are needed or uploaded by CI.
 
