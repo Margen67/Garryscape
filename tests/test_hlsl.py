@@ -28,11 +28,13 @@ class HlslCompilation(unittest.TestCase):
             unittest.SkipTest: If the native compiler fixture is not configured.
 
         """
-        cls.compiler = os.environ.get("GARRYSCAPE_HLSL_COMPILER")
-        cls.includes = os.environ.get("GARRYSCAPE_EGSM_INCLUDES")
-        if not cls.compiler or not cls.includes:
+        compiler = os.environ.get("GARRYSCAPE_HLSL_COMPILER")
+        includes = os.environ.get("GARRYSCAPE_EGSM_INCLUDES")
+        if not compiler or not includes:
             msg = "Set GARRYSCAPE_HLSL_COMPILER and GARRYSCAPE_EGSM_INCLUDES for native HLSL tests"
             raise unittest.SkipTest(msg)
+        cls.compiler = compiler
+        cls.includes = includes
         text = (ROOT / "addons/garryscape/lua/garryscape/atlas_shader.lua").read_text()
         cls.stages = dict(
             re.findall(

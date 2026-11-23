@@ -251,6 +251,11 @@ matches GLuaFixer. LuaLS annotates warnings and fails on errors.
 Run `ruff check .` to lint Python and `ruff format .` to apply formatting.
 Windows CI runs linting and `ruff format --check .` using `ruff.toml`.
 
+Checks also runs `python -m pyright` with the Blender 4.3 API stubs and
+`cargo deny --manifest-path converter/Cargo.toml --config deny.toml --locked check`
+against the Windows x64 dependency graph. The dependency policy checks RustSec
+advisories, licenses, duplicate versions, and package sources.
+
 The reusable Checks workflow runs formatting, linting, dependency update
 reporting, and Rust tests. It checks both Cargo profiles on Windows x64 with
 the pinned nightly toolchain and runs GMod LuaLS through the upstream workflow

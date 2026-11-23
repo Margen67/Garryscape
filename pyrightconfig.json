@@ -1,0 +1,14 @@
+{
+    "include": [
+        "tests",
+        "tools"
+    ],
+    "pythonVersion": "3.12",
+    "typeCheckingMode": "standard",
+    "executionEnvironments": [
+        {
+            "root": "tools",
+            "pythonVersion": "3.11"
+        }
+    ]
+}

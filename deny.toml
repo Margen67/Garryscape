@@ -1,0 +1,12 @@
+[graph]
+targets = ["x86_64-pc-windows-msvc"]
+
+[licenses]
+allow = ["AGPL-3.0-or-later", "Apache-2.0", "MIT", "Unicode-3.0", "Zlib", "bzip2-1.0.6"]
+
+[bans]
+multiple-versions = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
