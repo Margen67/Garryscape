@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 @{
-    IncludeRules = @('PS*')
     ExcludeRules = @(
         # The supplied compatibility targets predate the PowerShell 7.4 minimum.
         'PSUseCompatibleCmdlets'
@@ -11,10 +10,11 @@
         'PSUseConstrainedLanguageMode'
         # EditorConfig specifies UTF-8 without a BOM.
         'PSUseBOMForUnicodeEncodedFile'
+        # Prefer the ! negation operator.
+        'PSAvoidExclaimOperator'
     )
     Rules        = @{
         PSAlignAssignmentStatement                = @{ Enable = $true }
-        PSAvoidExclaimOperator                    = @{ Enable = $true }
         PSAvoidLongLines                          = @{ Enable = $true }
         PSAvoidSemicolonsAsLineTerminators        = @{ Enable = $true }
         PSAvoidUsingDoubleQuotesForConstantString = @{ Enable = $true }

@@ -33,7 +33,7 @@ function Resolve-LinkedPath {
     $root = [IO.Path]::GetPathRoot($Path)
     $resolved = $root
     foreach ($part in ($Path.Substring($root.Length) -split '[/\\]')) {
-        if (-not $part) { continue }
+        if (!$part) { continue }
         $resolved = Join-Path $resolved $part
         if (Test-Path -LiteralPath $resolved) {
             $item = Get-Item -LiteralPath $resolved -Force
@@ -51,7 +51,7 @@ function Copy-Asset {
     [IO.File]::Copy($Source, $Destination)
 }
 
-if ($Help -or -not $PSBoundParameters.Count) {
+if ($Help -or !$PSBoundParameters.Count) {
     @'
 Usage: ./convert.ps1 regions X Y [options]
   -Cache PATH       Native 2009Scape cache (default: $env:USERPROFILE/2009scape/cache/runescape)
@@ -75,14 +75,14 @@ try {
     if ([int]$X -gt 255 -or [int]$Y -gt 255) { throw 'Region coordinates must be 0..255.' }
     $X = [int]$X
     $Y = [int]$Y
-    if (-not $Name) { $Name = '530' }
+    if (!$Name) { $Name = '530' }
     if ($Name -cnotmatch '^[a-z0-9_-]+$') {
         throw 'Namespace must use lowercase letters, digits, hyphens or underscores.'
     }
-    if (-not $PSBoundParameters.ContainsKey('Cache') -and $env:USERPROFILE) {
+    if (!$PSBoundParameters.ContainsKey('Cache') -and $env:USERPROFILE) {
         $Cache = Join-Path $env:USERPROFILE '2009scape/cache/runescape'
     }
-    if (-not $Cache) { throw 'Set USERPROFILE or pass -Cache PATH.' }
+    if (!$Cache) { throw 'Set USERPROFILE or pass -Cache PATH.' }
     $Cache = Get-FullPath $Cache
     $Output = Get-FullPath $Output
     $cacheFiles = @(
@@ -91,17 +91,17 @@ try {
         'LIVE/main_file_cache.dat2'
         'LIVE/main_file_cache.dat2.dat'
     )
-    if (-not ($cacheFiles | Where-Object { Test-Path -LiteralPath (Join-Path $Cache $_) -PathType Leaf })) {
+    if (!($cacheFiles | Where-Object { Test-Path -LiteralPath (Join-Path $Cache $_) -PathType Leaf })) {
         throw "2009Scape cache not found in $Cache. Supply your revision-530 cache with -Cache."
     }
-    if (-not $PreviewOnly) {
+    if (!$PreviewOnly) {
         $StudioMdl = Get-FullPath $StudioMdl
-        if (-not (Test-Path -LiteralPath $StudioMdl -PathType Leaf)) {
+        if (!(Test-Path -LiteralPath $StudioMdl -PathType Leaf)) {
             throw "StudioMDL not found at $StudioMdl. Use -PreviewOnly to export without it."
         }
     }
     $cargo = Get-Command cargo -CommandType Application -ErrorAction SilentlyContinue
-    if (-not $cargo) { throw 'Nightly Rust/Cargo is required. Install it from https://rustup.rs.' }
+    if (!$cargo) { throw 'Nightly Rust/Cargo is required. Install it from https://rustup.rs.' }
     [void][IO.Directory]::CreateDirectory($Output)
 
     $flagName = 'RUSTFLAGS'
@@ -139,7 +139,7 @@ try {
         exit 0
     }
 
-    if (-not $Addon) { throw 'Addon destination must not be empty.' }
+    if (!$Addon) { throw 'Addon destination must not be empty.' }
     if ($Addon -match '(^|[/\\])\.{1,2}[/\\]*$') { throw 'Unsafe addon destination.' }
     $Addon = [IO.Path]::TrimEndingDirectorySeparator((Get-FullPath $Addon))
     if ($Addon -eq [IO.Path]::GetPathRoot($Addon)) { throw 'Unsafe addon destination.' }
@@ -171,14 +171,14 @@ try {
     $compiled = Join-Path $build 'compiled.json'
     $toolMarker = Join-Path $build 'compiled-tool.txt'
     $toolHash = (Get-FileHash -LiteralPath $StudioMdl).Hash
-    $validOutputs = -not ($required | Where-Object {
+    $validOutputs = !($required | Where-Object {
             $asset = Get-Item -LiteralPath "$model$_" -ErrorAction SilentlyContinue
-            -not $asset -or $asset.PSIsContainer -or -not $asset.Length
+            !$asset -or $asset.PSIsContainer -or !$asset.Length
         })
-    $reuse = -not $Rebuild -and $validOutputs -and [IO.File]::Exists($toolMarker) -and [IO.File]::Exists($compiled) -and
+    $reuse = !$Rebuild -and $validOutputs -and [IO.File]::Exists($toolMarker) -and [IO.File]::Exists($compiled) -and
     $toolHash -ceq [IO.File]::ReadAllText($toolMarker).Trim() -and
     (Get-FileHash -LiteralPath $complete).Hash -ceq (Get-FileHash -LiteralPath $compiled).Hash
-    if (-not $reuse) {
+    if (!$reuse) {
         $qc = Join-Path $source 'model.qc'
         $log = Join-Path $source 'compile.log'
         "Compiling $qc"
@@ -196,7 +196,7 @@ try {
         }
         foreach ($suffix in $required) {
             $asset = Get-Item -LiteralPath "$model$suffix" -ErrorAction SilentlyContinue
-            if (-not $asset -or $asset.PSIsContainer -or -not $asset.Length) {
+            if (!$asset -or $asset.PSIsContainer -or !$asset.Length) {
                 throw "StudioMDL did not produce $model$suffix. See $log."
             }
         }
@@ -222,7 +222,7 @@ try {
         $materials = "materials/models/garryscape/$Name/regions"
         Copy-Asset (Join-Path $game "$materials/$id.vtf") (Join-Path $staged "$materials/$id.vtf")
         $vmts = @(Get-ChildItem -LiteralPath (Join-Path $game $materials) -Filter "${id}_*.vmt" -File)
-        if (-not $vmts.Count) { throw "No VMTs were generated for region $id." }
+        if (!$vmts.Count) { throw "No VMTs were generated for region $id." }
         foreach ($vmt in $vmts) {
             Copy-Asset $vmt.FullName (Join-Path $staged "$materials/$($vmt.Name)")
         }
