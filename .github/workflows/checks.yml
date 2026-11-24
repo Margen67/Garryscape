@@ -66,6 +66,21 @@ jobs:
         if: matrix.profile == 'dev'
         run: python -m pyright
 
+      - name: Lint PowerShell
+        if: matrix.profile == 'dev'
+        run: |-
+          Install-Module -Name PSScriptAnalyzer -RequiredVersion 1.25.0 -Repository PSGallery -Scope CurrentUser -Force
+          Import-Module -Name PSScriptAnalyzer -RequiredVersion 1.25.0
+          $files = git ls-files -- '*.ps1' '*.psm1' '*.psd1'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $findings = foreach ($file in $files) {
+            Invoke-ScriptAnalyzer -Path $file -Settings ./PSScriptAnalyzerSettings.psd1
+          }
+          if ($findings) {
+            $findings | Format-Table ScriptName, Line, Severity, RuleName, Message -Wrap
+            throw 'PSScriptAnalyzer reported diagnostics.'
+          }
+
       - name: Lint GLua
         if: matrix.profile == 'dev'
         run: |-

@@ -240,6 +240,13 @@ python tests/test_preview.py  # optional liblua 5.3/5.4 for the lifecycle harnes
 python tests/test_hlsl.py     # optional native Microsoft HLSL compiler harness
 ```
 
+PowerShell linting uses PSScriptAnalyzer 1.25.0 and
+`PSScriptAnalyzerSettings.psd1` in Windows CI. Run it locally with:
+
+```powershell
+Invoke-ScriptAnalyzer -Path ./convert.ps1 -Settings ./PSScriptAnalyzerSettings.psd1
+```
+
 For GLua linting, install [GLuaFixer](https://github.com/FPtje/GLuaFixer) and
 run `glualint lint addons tests` from the repository root. The linter reads
 `glualint.json` automatically.
