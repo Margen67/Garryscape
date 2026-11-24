@@ -240,6 +240,9 @@ python tests/test_preview.py  # optional liblua 5.3/5.4 for the lifecycle harnes
 python tests/test_hlsl.py     # optional native Microsoft HLSL compiler harness
 ```
 
+CI checks GitHub Actions workflows with [actionlint](https://github.com/rhysd/actionlint).
+Run `actionlint` from the repository root to run the same workflow checks locally.
+
 PowerShell linting uses PSScriptAnalyzer 1.25.0 and
 `PSScriptAnalyzerSettings.psd1` in Windows CI. Run it locally with:
 

@@ -24,6 +24,15 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Lint GitHub Actions workflows
+        if: matrix.profile == 'dev'
+        run: |-
+          $actionlintDir = Join-Path $env:RUNNER_TEMP 'actionlint'
+          $archive = "$actionlintDir.zip"
+          Invoke-WebRequest -Uri 'https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_windows_amd64.zip' -OutFile $archive
+          Expand-Archive -LiteralPath $archive -DestinationPath $actionlintDir
+          & (Join-Path $actionlintDir 'actionlint.exe')
+
       - name: Set up pinned nightly Rust for Windows x64
         run: |-
           if ($env:RUNNER_OS -ne 'Windows' -or $env:RUNNER_ARCH -ne 'X64') {
