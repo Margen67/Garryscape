@@ -3,7 +3,7 @@
 if not EGSM or not shaderlib then
     if game.GetMap():lower() == "garryscape" then
         ErrorNoHalt("[Garryscape] The native atlas shader requires EGSM (x86-64). " ..
-            "See README.md; stock materials cannot repeat individual atlas entries.\n");
+            "See .github/README.md; stock materials cannot repeat individual atlas entries.\n");
     end
     return;
 end

@@ -10,4 +10,4 @@ The supplied split cache archive was recovered successfully. Reading its native
 JS5 files finds 3,682 map groups; `m50_50` is archive 5/group 382, with a verified
 compressed CRC of 2810179905. The cache remains outside the repository.
 
-See README.md for the supported terrain workflow and remaining milestones.
+See [README.md](.github/README.md) for the supported terrain workflow and remaining milestones.

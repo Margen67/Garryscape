@@ -132,4 +132,4 @@ mv -- "$STAGED" "$ADDON"
 trap - EXIT
 echo "Installed compiled region and preview Lua in $ADDON"
 echo 'Sources, glTF and compile.log remain in the output directory.'
-echo 'The atlas materials require EGSM on the game client. See README.md.'
+echo 'The atlas materials require EGSM on the game client. See .github/README.md.'

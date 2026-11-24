@@ -7,7 +7,7 @@ produce one region model. **No SMD and no cache decoding inside GMod.**
 
 The current milestone is **region 50/50, terrain only, all four floors plus the underwater floor, without
 collision**. Objects, NPCs, streaming, and gameplay come later. This is a rebuilt
-converter, not the former lost release; see [RECOVERY.md](RECOVERY.md).
+converter, not the former lost release; see [RECOVERY.md](../RECOVERY.md).
 
 ## Windows / Git Bash
 
@@ -314,11 +314,11 @@ compilation; actual GPU rendering still requires an in-game check.
   gameplay milestones, not required at runtime now.
 - [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer): shaped tile tables
   and procedural texture algorithms. Adapted portions retain its BSD-2-Clause
-  notice in [third_party/rs-map-viewer-LICENSE](third_party/rs-map-viewer-LICENSE).
+  notice in [third_party/rs-map-viewer-LICENSE](../third_party/rs-map-viewer-LICENSE).
 
 ## License
 
 The converter and Lua addon source are licensed under the GNU Affero General
-Public License, version 3 or later ([AGPL-3.0-or-later](LICENSE)). Adapted rs-map-viewer code
+Public License, version 3 or later ([AGPL-3.0-or-later](../LICENSE)). Adapted rs-map-viewer code
 retains its BSD-2-Clause notice in `third_party/rs-map-viewer-LICENSE`.
 Game/cache assets are not included or relicensed by this repository.

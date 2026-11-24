@@ -5,7 +5,7 @@ edition = "2021"
 license = "AGPL-3.0-or-later"
 description = "Offline 2009Scape terrain to glTF and Source DMX converter"
 repository = "https://github.com/Margen67/Garryscape"
-readme = "../README.md"
+readme = "../.github/README.md"
 keywords = ["runescape", "garrysmod", "converter", "gltf", "source-engine"]
 categories = ["command-line-utilities", "game-development", "encoding"]
 
