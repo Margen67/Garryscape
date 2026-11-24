@@ -519,6 +519,29 @@ impl Blending {
         }
         out
     }
+    /// Size the control rectangle from record counts without encoding pixels.
+    #[allow(
+        clippy::arithmetic_side_effects,
+        reason = "count bounded floor descriptors, blend records and atlas dimensions"
+    )]
+    pub(crate) fn control_side(&self) -> Result<usize> {
+        let mut texels = GRID + self.floors.len() * 5;
+        for layers in self.plans.iter().skip(1) {
+            texels += 1;
+            for layer in layers {
+                texels += 1 + layer.triangles.len() * 3;
+            }
+        }
+        ensure!(
+            texels < (1 << 24_i32),
+            "Blend control addresses exceed 24 bits"
+        );
+        let mut side = 2;
+        while side * side < texels {
+            side *= 2;
+        }
+        Ok(side)
+    }
     /// Encode compact triangle masks into the same atlas as native images.
     /// Each control is sampled exactly at mip 0; no mask rasterization is used.
     #[allow(
@@ -541,18 +564,14 @@ impl Blending {
         clippy::float_arithmetic,
         reason = "preserve native fixed-point truncation, bounded coordinate math and separate floating-point rounding"
     )]
-    pub(crate) fn encode(
-        &self,
-        rects: &BTreeMap<i32, [usize; 4]>,
-        textures: &crate::textures::Textures,
-    ) -> Result<(usize, Vec<[u8; 4]>)> {
+    pub(crate) fn encode(&self, rects: &BTreeMap<i32, [usize; 4]>) -> Result<Vec<[u8; 4]>> {
         let mut data = vec![[0; 4]; GRID];
         let mut descriptors = BTreeMap::new();
         let pair = |a: usize, b: usize| [a as u8, (a >> 8_i32) as u8, b as u8, (b >> 8_i32) as u8];
         for (&id, f) in &self.floors {
             let _previous = descriptors.insert(id, data.len());
             let rect = rects.get(&f.texture).copied().unwrap_or([0; 4]);
-            let tint = f.tint(textures.images.get(&f.texture));
+            let tint = self.tints[&id];
             data.extend([
                 pair(rect[0], rect[1]),
                 pair(rect[2], rect[3]),
@@ -592,17 +611,7 @@ impl Blending {
             let a = addresses[plan];
             data[i] = [a as u8, (a >> 8_i32) as u8, (a >> 16_i32) as u8, 0];
         }
-        ensure!(
-            data.len() < (1 << 24_i32),
-            "Blend control addresses exceed 24 bits"
-        );
-        let mut side = 2;
-        while side * side < data.len() {
-            side *= 2;
-        }
-        ensure!(side <= 8192, "Blend controls exceed atlas limit");
-        data.resize(side * side, [0; 4]);
-        Ok((side, data))
+        Ok(data)
     }
 }
 

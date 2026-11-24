@@ -107,20 +107,6 @@ impl Textures {
     }
 }
 impl Textures {
-    /// Insert an offline interpolation control image into the shared atlas.
-    pub(crate) fn add_control(&mut self, id: i32, size: usize, pixels: Vec<[u8; 4]>) {
-        let _previous = self.images.insert(
-            id,
-            Texture {
-                pixels,
-                size,
-                effect: 0,
-                brightness: 0,
-                boost: 0,
-                dependency: vec![],
-            },
-        );
-    }
     /// Read texture metadata from the native cache.
     #[allow(
         clippy::indexing_slicing,

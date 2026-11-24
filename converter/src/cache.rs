@@ -84,15 +84,18 @@ impl Cache {
         let mut chunk = 0_u16;
         let large = group > 65535;
         let header = if large { 10 } else { 8 };
+        let mut header_buffer = [0; 10];
+        let header_bytes = header_buffer
+            .get_mut(..header)
+            .context("Invalid sector header size")?;
         while result.len() < size {
             ensure!(
                 sector > 0 && seen.insert(sector),
                 "Invalid/cyclic sector chain"
             );
             let _consumed = self.data.seek(SeekFrom::Start(u64::from(sector) * 520))?;
-            let mut bytes = vec![0; header];
-            self.data.read_exact(&mut bytes)?;
-            let mut reader = Reader::new(&bytes);
+            self.data.read_exact(header_bytes)?;
+            let mut reader = Reader::new(header_bytes);
             let identity = if large {
                 reader.u32()?
             } else {
@@ -116,14 +119,14 @@ impl Cache {
         Ok(result)
     }
     /// Load an archive reference table, reusing its decoded metadata.
-    pub(crate) fn index(&mut self, archive: u8) -> Result<BTreeMap<u32, Group>> {
-        if let Some(index) = self.indices.get(&archive) {
-            return Ok(index.clone());
+    pub(crate) fn index(&mut self, archive: u8) -> Result<&BTreeMap<u32, Group>> {
+        if !self.indices.contains_key(&archive) {
+            let data = decode(&self.raw(255, u32::from(archive))?)?.0;
+            let _previous = self.indices.insert(archive, reference(&data)?);
         }
-        let data = decode(&self.raw(255, u32::from(archive))?)?.0;
-        let index = reference(&data)?;
-        let _previous = self.indices.insert(archive, index.clone());
-        Ok(index)
+        self.indices
+            .get(&archive)
+            .context("Missing cached archive index")
     }
     /// Extract one file from a verified group.
     pub(crate) fn file(&mut self, archive: u8, group: u32, file: u32) -> Result<Vec<u8>> {

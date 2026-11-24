@@ -215,42 +215,46 @@ type PackedAtlas = (
     clippy::arithmetic_side_effects,
     reason = "preserve native fixed-point truncation, bounded coordinate math and separate floating-point rounding"
 )]
-fn pack(textures: &Textures) -> Result<PackedAtlas> {
-    let mut unique: Vec<(&crate::textures::Texture, Vec<i32>)> = vec![];
+fn pack(textures: &Textures, control_side: Option<usize>) -> Result<PackedAtlas> {
+    let mut unique: Vec<(usize, Option<&crate::textures::Texture>, Vec<i32>)> = vec![];
     for (&id, image) in &textures.images {
         ensure!(
             image.pixels.len() == image.size * image.size,
             "Invalid native texture dimensions"
         );
-        if let Some(&mut (_, ref mut ids)) = unique
-            .iter_mut()
-            .find(|&&mut (other, _)| other.size == image.size && other.pixels == image.pixels)
-        {
+        if let Some(&mut (_, _, ref mut ids)) = unique.iter_mut().find(|&&mut (size, other, _)| {
+            size == image.size && other.is_some_and(|texture| texture.pixels == image.pixels)
+        }) {
             ids.push(id);
         } else {
-            unique.push((image, vec![id]));
+            unique.push((image.size, Some(image), vec![id]));
         }
     }
     // Power-of-two native images pack on shelves, without gutters or extrusion.
-    unique.sort_by_key(|&(t, _)| core::cmp::Reverse(t.size));
+    unique.sort_by_key(|&(size, _, _)| core::cmp::Reverse(size));
+    if let Some(size) = control_side {
+        // The reserved ID sorted before native IDs when sizes tied.
+        let position = unique.partition_point(|&(other_size, _, _)| other_size > size);
+        unique.insert(position, (size, None, vec![crate::blending::CONTROL_ID]));
+    }
     let mut side = 128_usize;
     let placements = loop {
         let (mut x, mut y, mut row) = (0, 0, 0);
         let mut placements = vec![];
         let mut fits = true;
-        for &(image, _) in &unique {
-            if x + image.size > side {
+        for &(size, _, _) in &unique {
+            if x + size > side {
                 x = 0;
                 y += row;
                 row = 0;
             }
-            if y + image.size > side || image.size > side {
+            if y + size > side || size > side {
                 fits = false;
                 break;
             }
-            placements.push([x, y, image.size, image.size]);
-            x += image.size;
-            row = row.max(image.size);
+            placements.push([x, y, size, size]);
+            x += size;
+            row = row.max(size);
         }
         if fits {
             break placements;
@@ -280,15 +284,16 @@ fn pack(textures: &Textures) -> Result<PackedAtlas> {
     let mut pixels = vec![0_u8; width * height * 4];
     let mut images = vec![];
     let mut ids = BTreeMap::new();
-    for ((image, source_ids), rect) in unique.into_iter().zip(placements) {
+    for ((_, source_image, source_ids), rect) in unique.into_iter().zip(placements) {
+        for id in &source_ids {
+            let _previous = ids.insert(*id, rect);
+        }
+        let Some(image) = source_image else { continue };
         for y in 0..image.size {
             for x in 0..image.size {
                 let dst = ((rect[1] + y) * width + rect[0] + x) * 4;
                 pixels[dst..dst + 4].copy_from_slice(&image.pixels[y * image.size + x]);
             }
-        }
-        for id in &source_ids {
-            let _previous = ids.insert(*id, rect);
         }
         let bytes = image.pixels.iter().flatten().copied().collect::<Vec<_>>();
         images.push(AtlasImage {
@@ -396,22 +401,19 @@ pub(crate) fn build(cache: &mut Cache, world: &World, scale: f32) -> Result<Regi
         .iter()
         .map(|(&id, f)| (id, f.tint(textures.images.get(&f.texture))))
         .collect();
-    let (control_side, placeholder) = blending.encode(&BTreeMap::new(), &textures)?;
-    textures.add_control(crate::blending::CONTROL_ID, control_side, placeholder);
-    let (mut pixels, [width, height], mut atlas_images, rects) = pack(&textures)?;
+    let control_side = blending.control_side()?;
+    let (mut pixels, [width, height], atlas_images, rects) = pack(&textures, Some(control_side))?;
     blending.rect = rects[&crate::blending::CONTROL_ID];
-    let (side, controls) = blending.encode(&rects, &textures)?;
+    let controls = blending.encode(&rects)?;
     ensure!(
-        side == control_side,
-        "Blend control size changed after packing"
+        controls.len() <= control_side * control_side,
+        "Blend controls exceed their reserved rectangle"
     );
-    for y in 0..side {
-        for x in 0..side {
-            let dst = ((blending.rect[1] + y) * width + blending.rect[0] + x) * 4;
-            pixels[dst..dst + 4].copy_from_slice(&controls[y * side + x]);
-        }
+    for (y, row) in controls.chunks(control_side).enumerate() {
+        let dst = ((blending.rect[1] + y) * width + blending.rect[0]) * 4;
+        let bytes = row.as_flattened();
+        pixels[dst..dst + bytes.len()].copy_from_slice(bytes);
     }
-    atlas_images.retain(|i| !i.source_ids.contains(&crate::blending::CONTROL_ID));
     let mut materials: Vec<Surface> = vec![];
     let mut triangles = vec![];
     let mut tiles = 0;
@@ -610,7 +612,7 @@ mod tests {
             (2_i32, (128, original.clone())),
             (3_i32, (64, small.clone())),
         ]));
-        let (pixels, [width, height], images, ids) = pack(&textures).unwrap();
+        let (pixels, [width, height], images, ids) = pack(&textures, None).unwrap();
         assert_eq!((width, height), (256, 128));
         assert_eq!(pixels.len(), width * height * 4);
         assert_eq!(images.len(), 2);
@@ -651,7 +653,7 @@ mod tests {
                     })
                     .collect(),
             );
-            let (pixels, dimensions, images, _) = pack(&textures).unwrap();
+            let (pixels, dimensions, images, _) = pack(&textures, None).unwrap();
             assert_eq!(dimensions, expected);
             assert_eq!(pixels.len(), dimensions[0] * dimensions[1] * 4);
             for image in images {

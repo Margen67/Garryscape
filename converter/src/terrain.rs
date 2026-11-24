@@ -183,11 +183,8 @@ fn named(cache: &mut Cache, name: &str) -> Result<Option<Vec<u8>>> {
         .fold(0_u32, |h, c| h.wrapping_mul(31).wrapping_add(u32::from(c)));
     let index = cache.index(5)?;
     if let Some((&id, group)) = index.iter().find(|&(_, g)| g.name_hash == Some(hash)) {
-        Ok(Some(cache.file(
-            5,
-            id,
-            *group.files.first().context("Empty terrain group")?,
-        )?))
+        let file = *group.files.first().context("Empty terrain group")?;
+        Ok(Some(cache.file(5, id, file)?))
     } else {
         Ok(None)
     }
