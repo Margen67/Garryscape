@@ -1,2 +1,2 @@
-# Keep Git Bash scripts executable and source text consistent on Windows.
+# Keep source text consistent across platforms.
 * text=auto eol=lf

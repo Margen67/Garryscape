@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Test Git Bash orchestration with a fake compiler, not a real MDL compile."""
+"""Test PowerShell orchestration with a fake compiler, not a real MDL compile."""
 
 import os
 import shutil
@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from typing import override
 
-BASH = shutil.which("bash") or "bash"
+PWSH = shutil.which("pwsh")
 
 REPO = Path(__file__).resolve().parents[1]
 CLI = """#!/usr/bin/env python3
@@ -33,7 +33,6 @@ m=b/'game/materials/models/garryscape'/ns/'regions';m.mkdir(parents=True,exist_o
 """
 COMPILER = """#!/usr/bin/env python3
 import os,pathlib,re,sys
-assert os.environ['MSYS2_ARG_CONV_EXCL']=='*'
 args=sys.argv[1:]
 assert args[0]=='-game'
 game=pathlib.Path(args[1])
@@ -50,6 +49,7 @@ for suffix in ['mdl','vvd','dx90.vtx']:p.with_suffix('.'+suffix).write_text('com
 """
 
 
+@unittest.skipIf(PWSH is None or os.name == "nt", "Requires pwsh and POSIX executable fixtures")
 class Script(unittest.TestCase):
     """Check converter and compiler orchestration in a temporary install."""
 
@@ -71,7 +71,7 @@ class Script(unittest.TestCase):
         self.path = Path(self.tmp.name)
         self.repo = self.path / "repo with spaces"
         self.repo.mkdir()
-        _ = shutil.copy(REPO / "convert.sh", self.repo / "convert.sh")
+        _ = shutil.copy(REPO / "convert.ps1", self.repo / "convert.ps1")
         _ = shutil.copy(REPO / "LICENSE", self.repo / "LICENSE")
         _ = shutil.copy(REPO / "rust-toolchain.toml", self.repo / "rust-toolchain.toml")
         (self.repo / "addons/garryscape/lua/autorun/server").mkdir(parents=True)
@@ -102,6 +102,7 @@ class Script(unittest.TestCase):
             """#!/bin/sh
 test "$PWD" = "$GARRYSCAPE_TEST_CARGO_ROOT" || exit 41
 test -f rust-toolchain.toml || exit 42
+test "$RUSTFLAGS" = "-Ctarget-cpu=native" || exit 43
 exit 0
 """,
         )
@@ -134,7 +135,6 @@ exit 0
         self,
         *extra: str,
         fail: str | None = None,
-        default_addon: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         """Run the conversion script with the current fixture.
 
@@ -146,21 +146,23 @@ exit 0
         if fail:
             env["FAIL_MODE"] = fail
         args = [
-            BASH,
-            str(self.repo / "convert.sh"),
+            PWSH or "pwsh",
+            "-NoProfile",
+            "-File",
+            str(self.repo / "convert.ps1"),
             "regions",
             "50",
             "50",
-            "--cache",
+            "-Cache",
             str(self.cache),
-            "--studiomdl",
+            "-StudioMdl",
             str(self.compiler),
-            "--output",
+            "-Output",
             "relative output",
+            "-Addon",
+            str(self.addon),
             *extra,
         ]
-        if not default_addon:
-            args += ["--addon", str(self.addon)]
         return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
             args, env=env, cwd=self.path, check=False, text=True, capture_output=True
         )
@@ -194,20 +196,29 @@ exit 0
 
     def test_default_installs_under_garrysmod_directory(self) -> None:
         """Resolve the default addon destination beneath garrysmod."""
-        game = self.path / "Steam/GarrysMod"
-        self.env["TEST_GAME_ROOT"] = str(game)
-        self.exe(
-            self.bin / "cygpath",
-            """#!/usr/bin/env python3
-import os,sys
-path=sys.argv[2]
-steam_install = 'C:/Program Files (x86)/Steam/steamapps/common/GarrysMod/'
-if sys.argv[1]=='-u' and path.startswith(steam_install):
- path=os.environ['TEST_GAME_ROOT']+'/'+path.split('/GarrysMod/',1)[1]
-print(path)
-""",
+        game = self.path / "Program Files (x86)/Steam/steamapps/common/GarrysMod"
+        self.env["TEST_FAKE_COMPILER"] = str(self.compiler)
+        r = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
+            [
+                PWSH or "pwsh",
+                "-NoProfile",
+                "-Command",
+                """New-PSDrive -Name C -PSProvider FileSystem -Root $env:TEST_DRIVE | Out-Null
+& $env:TEST_LAUNCHER regions 50 50 -Cache $env:TEST_CACHE `
+    -StudioMdl $env:TEST_FAKE_COMPILER -Output 'relative output'
+exit $LASTEXITCODE""",
+            ],
+            env={
+                **self.env,
+                "TEST_DRIVE": str(self.path),
+                "TEST_LAUNCHER": str(self.repo / "convert.ps1"),
+                "TEST_CACHE": str(self.cache),
+            },
+            cwd=self.path,
+            capture_output=True,
+            text=True,
+            check=False,
         )
-        r = self.run_script(default_addon=True)
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
         addon = game / "garrysmod/addons/garryscape"
         self.assertTrue((addon / "models/garryscape/2009scape/regions/50_50.mdl").is_file())
@@ -220,13 +231,13 @@ print(path)
     def test_rebuild_recompiles(self) -> None:
         """Invoke StudioMDL again when rebuilding."""
         self.assertEqual(self.run_script().returncode, 0)
-        self.assertEqual(self.run_script("--rebuild").returncode, 0)
+        self.assertEqual(self.run_script("-Rebuild").returncode, 0)
         self.assertEqual(self.counter.read_text().count("compile"), 2)
 
     def test_stale_outputs_do_not_hide_empty_compile(self) -> None:
         """Reject a compiler run that leaves its expected outputs missing."""
         self.assertEqual(self.run_script().returncode, 0)
-        r = self.run_script("--rebuild", fail="nothing")
+        r = self.run_script("-Rebuild", fail="nothing")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("did not produce", r.stderr)
 
@@ -247,7 +258,7 @@ print(path)
         marker = self.addon / "keep.txt"
         _ = marker.write_text("previous installation")
         for mode in ["exit", "message", "nothing"]:
-            r = self.run_script("--rebuild", fail=mode)
+            r = self.run_script("-Rebuild", fail=mode)
             self.assertNotEqual(r.returncode, 0)
             self.assertEqual(marker.read_text(), "previous installation")
 
@@ -268,11 +279,12 @@ print(path)
         r = self.run_script()
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("would delete source", r.stderr)
-        self.assertTrue((self.repo / "convert.sh").is_file())
+        self.assertTrue((self.repo / "convert.ps1").is_file())
 
     def test_preview_does_not_compile_or_install(self) -> None:
         """Export the preview without running StudioMDL or installing the addon."""
-        r = self.run_script("--preview-only")
+        self.compiler.unlink()
+        r = self.run_script("-PreviewOnly")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertFalse(self.counter.exists())
         self.assertFalse(self.addon.exists())
@@ -283,7 +295,14 @@ print(path)
     def test_region_required(self) -> None:
         """Reject conversion without both region coordinates."""
         r = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
-            [BASH, str(self.repo / "convert.sh"), "regions", "50"],
+            [
+                PWSH or "pwsh",
+                "-NoProfile",
+                "-File",
+                str(self.repo / "convert.ps1"),
+                "regions",
+                "50",
+            ],
             capture_output=True,
             text=True,
             check=False,
@@ -293,7 +312,7 @@ print(path)
 
     def test_empty_namespace_uses_revision(self) -> None:
         """Use the cache revision when the namespace is empty."""
-        r = self.run_script("--name", "")
+        r = self.run_script("-Name", "")
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
         self.assertTrue((self.addon / "models/garryscape/530/regions/50_50.mdl").is_file())
 

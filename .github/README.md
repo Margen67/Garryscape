@@ -2,38 +2,39 @@
 
 Offline **2009Scape (RuneScape revision 530)** terrain conversion for Garry's Mod.
 The Rust converter reads the native cache and exports a Blender-preview **glTF folder**,
-**DMX**, QC, and Source materials. Git Bash invokes Garry's Mod's StudioMDL to
+**DMX**, QC, and Source materials. PowerShell invokes Garry's Mod's StudioMDL to
 produce one region model. **No SMD and no cache decoding inside GMod.**
 
 The current milestone is **region 50/50, terrain only, all four floors plus the underwater floor, without
 collision**. Objects, NPCs, streaming, and gameplay come later. This is a rebuilt
 converter, not the former lost release; see [RECOVERY.md](../RECOVERY.md).
 
-## Windows / Git Bash
+## Windows / PowerShell 7.4+
 
-Install [Rust through rustup](https://rustup.rs/) (the MSVC toolchain also needs
+Install [PowerShell 7.4 or newer](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows),
+[Rust through rustup](https://rustup.rs/) (the MSVC toolchain also needs
 Visual Studio's C++ build tools and Windows SDK), Garry's Mod, and optionally
 Blender. The repository pins **nightly-2026-11-19** with Clippy and rustfmt in
 `rust-toolchain.toml`; rustup installs that toolchain on first use. The script
 selects it from any working directory, including paths containing spaces. Run:
 
-```bash
-./convert.sh regions 50 50
+```powershell
+./convert.ps1 regions 50 50
 ```
 
 Defaults:
 
 | Setting | Path/value |
 | --- | --- |
-| Cache | `${UserProfile}/2009scape/cache/runescape` (`USERPROFILE` also accepted) |
+| Cache | `$env:USERPROFILE/2009scape/cache/runescape` |
 | Scale | `0.68` |
 | Namespace | `2009scape` |
 | StudioMDL | `C:/Program Files (x86)/Steam/steamapps/common/GarrysMod/bin/win64/studiomdl.exe` |
 | Addon | `C:/Program Files (x86)/Steam/steamapps/common/GarrysMod/garrysmod/addons/garryscape` |
-| Working output | `output/` beside `convert.sh` |
+| Working output | `output/` beside `convert.ps1` |
 
 The addon default is the installed game’s `garrysmod/addons/garryscape` directory.
-Use `--addon` for a different Steam library. The script prints the destination
+Use `-Addon` for a different Steam library. The script prints the destination
 before compilation and does not edit game search paths or download a cache.
 
 The cache must contain `main_file_cache.dat2` and its `main_file_cache.idx*` files
@@ -41,21 +42,21 @@ The cache must contain `main_file_cache.dat2` and its `main_file_cache.idx*` fil
 It remains read-only; every consumed group is checked against its reference CRC.
 The 2009Scape Server repository is not needed for this milestone.
 
-```bash
+```powershell
 # Export for Blender, without running StudioMDL or installing anything:
-./convert.sh regions 50 50 --preview-only
+./convert.ps1 regions 50 50 -PreviewOnly
 
 # Explicit paths and scale:
-./convert.sh regions 50 50 --cache 'C:/Users/marge/2009scape/cache/runescape' --scale 0.68
+./convert.ps1 regions 50 50 -Cache 'C:/Users/marge/2009scape/cache/runescape' -Scale 0.68
 
 # Use revision number 530 instead of an RSPS namespace:
-./convert.sh regions 50 50 --name ''
+./convert.ps1 regions 50 50 -Name ''
 
 # Override the installed addon location:
-./convert.sh regions 50 50 --addon 'D:/Steam/GarrysMod/garrysmod/addons/garryscape'
+./convert.ps1 regions 50 50 -Addon 'D:/Steam/GarrysMod/garrysmod/addons/garryscape'
 ```
 
-Coordinates are mandatory. `--help` lists all options. The Rust CLI also supports
+Coordinates are mandatory. `-Help` lists all options. The Rust CLI also supports
 `inspect-cache PATH`. Other regions may be requested, but 50/50 is the validation
 target; an unsupported procedural texture operation produces an explicit error
 rather than silently substituting a texture.
@@ -105,7 +106,7 @@ RT4's per-vertex surface-height flags, so banks join the riverbed without a gap.
 Shaped vertices use RT4's HD bilinear height interpolation and integer rounding. It does not simplify faces, add
 replacement geometry, split triangles for UV seams, or rasterize terrain shapes
 and transitions into per-tile images. The coordinate conversion changes axes,
-uses a region-local origin, and applies `--scale`.
+uses a region-local origin, and applies `-Scale`.
 
 The single atlas contains native procedural texture images at their native
 64×64 or 128×128 resolution. Only byte-identical RGBA images of the same
@@ -200,17 +201,17 @@ geometry and metadata but does not configure the custom atlas material. The
 folder contains one lossless WebP atlas and one binary mesh buffer.
 
 Unchanged input/configuration reuses converted files and the compiled model.
-Changing the StudioMDL executable triggers compilation again; `--rebuild` forces
+Changing the StudioMDL executable triggers compilation again; `-Rebuild` forces
 both conversion and compilation.
 The fingerprint includes converter executable contents, cache-file timestamps
-and sizes, region, namespace, and scale. Use `--rebuild` after manually replacing
+and sizes, region, namespace, and scale. Use `-Rebuild` after manually replacing
 cache data while preserving its timestamps, or to regenerate deliberately.
 Failed StudioMDL inputs and logs are retained, and a failed build is not installed.
 After a successful build (including reuse of a verified compiled model), the
 script stages the addon, deletes the entire destination `garryscape` addon folder,
 and replaces it with this build. Stale files and previously installed regions
 are removed. Compilation or staging failures preserve the previous installation;
-`--preview-only` never replaces it.
+`-PreviewOnly` never replaces it.
 
 ## Map preview
 
@@ -228,12 +229,11 @@ collision is not implemented.
 
 ## Validation
 
-```bash
+```powershell
 cargo fmt --manifest-path converter/Cargo.toml --all -- --check
 cargo test --locked --manifest-path converter/Cargo.toml
 cargo clippy --locked --manifest-path converter/Cargo.toml --all-targets -- -D warnings
-bash -n convert.sh
-./convert.sh regions 50 50 --cache /path/to/cache --preview-only
+./convert.ps1 regions 50 50 -Cache /path/to/cache -PreviewOnly
 python tests/validate_region.py output/2009scape/regions/50_50
 python tests/test_script.py
 python tests/test_preview.py  # optional liblua 5.3/5.4 for the lifecycle harness
@@ -261,7 +261,7 @@ reporting, and Rust tests. It checks both Cargo profiles on Windows x64 with
 the pinned nightly toolchain and runs GMod LuaLS through the upstream workflow
 on Ubuntu. The Windows x64 build waits for Checks to pass, then builds the
 debug (`dev`) and optimized (`release`) profiles. Only the release build
-uploads **garryscape-convert-windows-x64.7z**. `convert.sh` builds and runs
+uploads **garryscape-convert-windows-x64.7z**. `convert.ps1` builds and runs
 the optimized release converter.
 No RuneScape cache or compiled game assets are needed or uploaded by CI.
 
@@ -290,9 +290,9 @@ no `RUSTC_BOOTSTRAP` override is used. Run Cargo commands from the repository
 root or its `converter` directory to select the pinned toolchain automatically.
 
 For visual inspection, use the Blender loader above; Blender is not required to
-convert or compile. Linux can export the inputs using `--preview-only`; actual
+convert or compile. PowerShell can export the inputs using `-PreviewOnly` on Linux; actual
 Windows StudioMDL and in-game rendering must be checked on Windows. Automated
-script tests use a fake compiler to verify orchestration, not to claim a real
+script tests use POSIX fixtures with PowerShell and a fake compiler to verify orchestration, not to claim a real
 MDL compilation. The Lua harness checks map isolation, terrain spawning and
 cleanup, missing-model diagnostics, and deferred player placement with noclip.
 
