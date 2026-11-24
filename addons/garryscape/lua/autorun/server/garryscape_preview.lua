@@ -1,7 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Automate the in-game preview using compiled Source assets only.
-AddCSLuaFile("autorun/client/garryscape_utilities.lua");
-AddCSLuaFile("autorun/client/garryscape_shader.lua");
 AddCSLuaFile("garryscape/atlas_shader.lua");
 if game.GetMap():lower() ~= "garryscape" then return; end
 local origin = Vector(0, 0, -12000);
