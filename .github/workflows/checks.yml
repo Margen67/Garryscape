@@ -29,7 +29,13 @@ jobs:
         run: |-
           $actionlintDir = Join-Path $env:RUNNER_TEMP 'actionlint'
           $archive = "$actionlintDir.zip"
-          Invoke-WebRequest -Uri 'https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_windows_amd64.zip' -OutFile $archive
+          $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/rhysd/actionlint/releases/latest'
+          $assets = @($release.assets | Where-Object { $_.name -like 'actionlint_*_windows_amd64.zip' })
+          if ($assets.Count -ne 1) {
+            throw "Expected one Windows x64 archive in actionlint release $($release.tag_name)."
+          }
+          Write-Host "Using actionlint $($release.tag_name)"
+          Invoke-WebRequest -Uri $assets[0].browser_download_url -OutFile $archive
           Expand-Archive -LiteralPath $archive -DestinationPath $actionlintDir
           & (Join-Path $actionlintDir 'actionlint.exe')
 
