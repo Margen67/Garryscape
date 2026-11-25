@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Lossless RGBA8888 VTF 7.5. Full mip chain, generated once offline.
+//! Lossless RGBA8888 VTF 7.4. Full mip chain, generated once offline.
 use crate::region::RegionMesh;
 use anyhow::{Context as _, Result};
 use std::{
@@ -34,7 +34,7 @@ pub(crate) fn write(baked: &RegionMesh, path: &Path) -> Result<()> {
     let mut header = [0_u8; 88];
     header[..4].copy_from_slice(b"VTF\0");
     header[4..8].copy_from_slice(&7_u32.to_le_bytes());
-    header[8..12].copy_from_slice(&5_u32.to_le_bytes());
+    header[8..12].copy_from_slice(&4_u32.to_le_bytes());
     header[12..16].copy_from_slice(&88_u32.to_le_bytes());
     header[16..18].copy_from_slice(&(baked.width as u16).to_le_bytes());
     header[18..20].copy_from_slice(&(baked.height as u16).to_le_bytes());

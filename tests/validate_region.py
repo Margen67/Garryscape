@@ -105,7 +105,7 @@ def validate(root: str | Path) -> None:
     with textures[0].open("rb") as stream:
         header = stream.read(88)
     assert header[:4] == b"VTF\0"
-    assert struct.unpack_from("<II", header, 4) == (7, 5)
+    assert struct.unpack_from("<II", header, 4) == (7, 4)
     (header_size,) = struct.unpack_from("<I", header, 12)
     assert header_size == 88
     assert struct.unpack_from("<I", header, 68) == (1,)
