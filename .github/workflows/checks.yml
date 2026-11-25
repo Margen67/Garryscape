@@ -57,7 +57,14 @@ jobs:
 
       - name: Check Rust formatting
         if: matrix.profile == 'dev'
-        run: cargo fmt --manifest-path converter/Cargo.toml --all -- --check
+        run: |-
+          cargo fmt --manifest-path converter/Cargo.toml --all -- --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustfmt --check --edition 2024 tests/hlsl_compile.rs
+
+      - name: Build the Rust HLSL test helper
+        if: matrix.profile == 'dev'
+        run: rustc --edition 2024 -D warnings tests/hlsl_compile.rs -o "$env:RUNNER_TEMP/hlsl_compile.exe"
 
       - name: Lint Python with Ruff
         if: matrix.profile == 'dev'

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Compile actual EGSM HLSL variants with Microsoft's Shader Model 3 compiler.
 
-Build hlsl_compile.cpp with the Windows SDK, or Winelib, then set
+Build tests/hlsl_compile.rs as a Windows executable, then set
 GARRYSCAPE_HLSL_COMPILER and GARRYSCAPE_EGSM_INCLUDES. No compiler DLLs, shader
 includes or compiled output are bundled. This checks compilation, not GPU drawing.
 """

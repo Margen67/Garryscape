@@ -306,15 +306,23 @@ script tests use POSIX fixtures with PowerShell and a fake compiler to verify or
 MDL compilation. The Lua harness checks map isolation, terrain spawning and
 cleanup, missing-model diagnostics, and deferred player placement with noclip.
 
-The Lua harness checks API wiring, not HLSL register allocation. To run the
-native compiler regression test, build `tests/hlsl_compile.cpp` using the Windows
-SDK (or Winelib), and set `GARRYSCAPE_HLSL_COMPILER` to that executable and
-`GARRYSCAPE_EGSM_INCLUDES` to EGSM's `include_files` directory. The helper loads
-Microsoft's `d3dcompiler_47.dll`; `GARRYSCAPE_D3DCOMPILER_DLL` can specify another
-location. It compiles all ten vertex and ten pixel variants using EGSM's default
-flags and reports temporary-register usage. Compiler DLLs, upstream headers,
-and compiled test output are not included in this repository. These tests verify
-compilation; actual GPU rendering still requires an in-game check.
+The Lua harness checks API wiring. To check shader compilation and register
+usage, build the Rust helper on Windows and point the Python harness at it:
+
+```powershell
+rustc --edition 2024 tests/hlsl_compile.rs -o "$env:TEMP/hlsl_compile.exe"
+$env:GARRYSCAPE_HLSL_COMPILER = "$env:TEMP/hlsl_compile.exe"
+$env:GARRYSCAPE_EGSM_INCLUDES = 'C:/path/to/EGSM/include_files'
+python tests/test_hlsl.py
+```
+
+The helper loads Microsoft's `d3dcompiler_47.dll`. Set
+`GARRYSCAPE_D3DCOMPILER_DLL` to use another location. It compiles all ten vertex
+and ten pixel variants using EGSM's default flags. On Linux, build for
+`x86_64-pc-windows-gnullvm` with LLVM MinGW and use a Wine launcher that passes
+Windows paths for the source file, includes directory, and DLL. Compiler DLLs, upstream headers, and
+compiled test output are external. Actual GPU rendering still requires an
+in-game check.
 
 ## References
 
