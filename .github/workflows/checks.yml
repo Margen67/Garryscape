@@ -125,6 +125,25 @@ jobs:
       - name: Run Rust tests
         run: cargo test --locked --manifest-path converter/Cargo.toml --all-targets --profile ${{ matrix.profile }} --target x86_64-pc-windows-msvc --message-format=short
 
+      - name: Install unused dependency checkers
+        if: matrix.profile == 'dev'
+        run: cargo install --locked cargo-machete cargo-udeps cargo-shear
+
+      - name: Check unused dependencies with cargo-machete
+        if: matrix.profile == 'dev'
+        working-directory: converter
+        run: cargo machete
+
+      - name: Check unused dependencies with cargo-udeps
+        if: matrix.profile == 'dev'
+        working-directory: converter
+        run: cargo udeps --locked --all-targets
+
+      - name: Check unused dependencies with cargo-shear
+        if: matrix.profile == 'dev'
+        working-directory: converter
+        run: cargo shear --deny-warnings
+
       - name: Install crate update checker
         if: matrix.profile == 'dev'
         run: cargo install cargo-outdated --locked
